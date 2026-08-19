@@ -1,0 +1,296 @@
+# Generated for MPSqre Build360 Phase 26 Document Control and Engineering Operations.
+
+import uuid
+
+import django.db.models.deletion
+from django.db import migrations, models
+
+
+def base_fields():
+    return [
+        ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+        ("public_id", models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
+        ("created_at", models.DateTimeField(auto_now_add=True, editable=False)),
+        ("updated_at", models.DateTimeField(auto_now=True)),
+    ]
+
+
+class Migration(migrations.Migration):
+    initial = True
+
+    dependencies = [("tenant", "0001_initial")]
+
+    operations = [
+        migrations.CreateModel(
+            name="DocumentControlPolicyVersion",
+            fields=base_fields() + [
+                ("code", models.CharField(max_length=80)),
+                ("name", models.CharField(max_length=200)),
+                ("version", models.PositiveIntegerField()),
+                ("status_code", models.CharField(max_length=80)),
+                ("effective_from", models.DateTimeField()),
+                ("effective_to", models.DateTimeField(blank=True, null=True)),
+                ("published_at", models.DateTimeField(blank=True, null=True)),
+                ("retired_at", models.DateTimeField(blank=True, null=True)),
+                ("configuration", models.JSONField(default=dict)),
+                ("change_note", models.TextField(blank=True)),
+                ("created_by_membership_public_id", models.UUIDField(blank=True, null=True)),
+                ("published_by_membership_public_id", models.UUIDField(blank=True, null=True)),
+                ("company", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name="document_control_policy_versions", to="tenant.company")),
+            ],
+            options={
+                "db_table": "documentops_policy_version",
+                "constraints": [
+                    models.UniqueConstraint(fields=("company", "code", "version"), name="dops_pol_code_ver_uq"),
+                    models.CheckConstraint(condition=models.Q(("effective_to__isnull", True), ("effective_to__gt", models.F("effective_from")), _connector="OR"), name="dops_pol_range_ck"),
+                    models.CheckConstraint(condition=models.Q(("retired_at__isnull", True), ("published_at__isnull", False), _connector="OR"), name="dops_pol_retire_ck"),
+                ],
+                "indexes": [models.Index(fields=["company", "code", "published_at", "retired_at"], name="dops_pol_active_ix")],
+            },
+        ),
+        migrations.CreateModel(
+            name="ControlledDocument",
+            fields=base_fields() + [
+                ("document_number", models.CharField(max_length=120)),
+                ("project_public_id", models.UUIDField(blank=True, null=True)),
+                ("discipline_code", models.CharField(max_length=100)),
+                ("document_type_code", models.CharField(max_length=100)),
+                ("title", models.CharField(max_length=300)),
+                ("description", models.TextField(blank=True)),
+                ("status_code", models.CharField(max_length=80)),
+                ("current_revision_code", models.CharField(blank=True, max_length=40)),
+                ("confidentiality_code", models.CharField(blank=True, max_length=80)),
+                ("originator_membership_public_id", models.UUIDField(blank=True, null=True)),
+                ("owner_membership_public_id", models.UUIDField(blank=True, null=True)),
+                ("attributes", models.JSONField(default=dict)),
+                ("version", models.PositiveIntegerField(default=1)),
+                ("company", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name="controlled_documents", to="tenant.company")),
+                ("policy", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name="documents", to="documentops.documentcontrolpolicyversion")),
+            ],
+            options={
+                "db_table": "documentops_document",
+                "constraints": [models.UniqueConstraint(fields=("company", "document_number"), name="dops_doc_no_uq")],
+                "indexes": [
+                    models.Index(fields=["company", "status_code", "discipline_code"], name="dops_doc_status_ix"),
+                    models.Index(fields=["company", "document_type_code", "project_public_id"], name="dops_doc_type_ix"),
+                ],
+            },
+        ),
+        migrations.CreateModel(
+            name="DocumentRevision",
+            fields=base_fields() + [
+                ("revision_code", models.CharField(max_length=40)),
+                ("sequence_number", models.PositiveIntegerField(default=1)),
+                ("status_code", models.CharField(max_length=80)),
+                ("purpose_code", models.CharField(max_length=100)),
+                ("description", models.TextField(blank=True)),
+                ("file_reference", models.CharField(blank=True, max_length=500)),
+                ("checksum_sha256", models.CharField(blank=True, max_length=64)),
+                ("file_size_bytes", models.PositiveBigIntegerField(blank=True, null=True)),
+                ("created_by_membership_public_id", models.UUIDField()),
+                ("reviewed_by_membership_public_id", models.UUIDField(blank=True, null=True)),
+                ("approved_by_membership_public_id", models.UUIDField(blank=True, null=True)),
+                ("submitted_at", models.DateTimeField(blank=True, null=True)),
+                ("issued_at", models.DateTimeField(blank=True, null=True)),
+                ("superseded_at", models.DateTimeField(blank=True, null=True)),
+                ("version", models.PositiveIntegerField(default=1)),
+                ("company", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name="document_revisions", to="tenant.company")),
+                ("document", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name="revisions", to="documentops.controlleddocument")),
+                ("policy", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name="revisions", to="documentops.documentcontrolpolicyversion")),
+            ],
+            options={
+                "db_table": "documentops_revision",
+                "constraints": [
+                    models.UniqueConstraint(fields=("company", "document", "revision_code"), name="dops_rev_code_uq"),
+                    models.UniqueConstraint(fields=("company", "document", "sequence_number"), name="dops_rev_seq_uq"),
+                    models.CheckConstraint(condition=models.Q(("sequence_number__gte", 1)), name="dops_rev_seq_ck"),
+                    models.CheckConstraint(condition=models.Q(("superseded_at__isnull", True), ("issued_at__isnull", False), _connector="OR"), name="dops_rev_super_ck"),
+                ],
+                "indexes": [models.Index(fields=["company", "status_code", "submitted_at"], name="dops_rev_status_ix")],
+            },
+        ),
+        migrations.CreateModel(
+            name="DocumentTransmittal",
+            fields=base_fields() + [
+                ("transmittal_number", models.CharField(max_length=120)),
+                ("project_public_id", models.UUIDField(blank=True, null=True)),
+                ("direction_code", models.CharField(max_length=40)),
+                ("status_code", models.CharField(max_length=80)),
+                ("subject", models.CharField(max_length=300)),
+                ("sender_party_public_id", models.UUIDField(blank=True, null=True)),
+                ("recipient_party_public_id", models.UUIDField(blank=True, null=True)),
+                ("issued_at", models.DateTimeField(blank=True, null=True)),
+                ("due_at", models.DateTimeField(blank=True, null=True)),
+                ("acknowledged_at", models.DateTimeField(blank=True, null=True)),
+                ("closed_at", models.DateTimeField(blank=True, null=True)),
+                ("document_manifest", models.JSONField(default=list)),
+                ("notes", models.TextField(blank=True)),
+                ("created_by_membership_public_id", models.UUIDField()),
+                ("version", models.PositiveIntegerField(default=1)),
+                ("company", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name="document_transmittals", to="tenant.company")),
+                ("policy", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name="transmittals", to="documentops.documentcontrolpolicyversion")),
+            ],
+            options={
+                "db_table": "documentops_transmittal",
+                "constraints": [
+                    models.UniqueConstraint(fields=("company", "transmittal_number"), name="dops_tx_no_uq"),
+                    models.CheckConstraint(condition=models.Q(("due_at__isnull", True), ("issued_at__isnull", True), ("due_at__gte", models.F("issued_at")), _connector="OR"), name="dops_tx_due_ck"),
+                    models.CheckConstraint(condition=models.Q(("closed_at__isnull", True), ("acknowledged_at__isnull", False), _connector="OR"), name="dops_tx_close_ck"),
+                ],
+                "indexes": [models.Index(fields=["company", "status_code", "due_at"], name="dops_tx_status_ix")],
+            },
+        ),
+        migrations.CreateModel(
+            name="RequestForInformation",
+            fields=base_fields() + [
+                ("rfi_number", models.CharField(max_length=120)),
+                ("project_public_id", models.UUIDField(blank=True, null=True)),
+                ("discipline_code", models.CharField(max_length=100)),
+                ("priority_code", models.CharField(max_length=80)),
+                ("status_code", models.CharField(max_length=80)),
+                ("subject", models.CharField(max_length=300)),
+                ("question", models.TextField()),
+                ("raised_at", models.DateTimeField()),
+                ("raised_by_membership_public_id", models.UUIDField()),
+                ("assigned_to_membership_public_id", models.UUIDField(blank=True, null=True)),
+                ("response_due_at", models.DateTimeField(blank=True, null=True)),
+                ("responded_at", models.DateTimeField(blank=True, null=True)),
+                ("responded_by_membership_public_id", models.UUIDField(blank=True, null=True)),
+                ("response_text", models.TextField(blank=True)),
+                ("closed_at", models.DateTimeField(blank=True, null=True)),
+                ("linked_document_public_ids", models.JSONField(default=list)),
+                ("version", models.PositiveIntegerField(default=1)),
+                ("company", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name="document_rfis", to="tenant.company")),
+                ("policy", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name="rfis", to="documentops.documentcontrolpolicyversion")),
+            ],
+            options={
+                "db_table": "documentops_rfi",
+                "constraints": [
+                    models.UniqueConstraint(fields=("company", "rfi_number"), name="dops_rfi_no_uq"),
+                    models.CheckConstraint(condition=models.Q(("response_due_at__isnull", True), ("response_due_at__gte", models.F("raised_at")), _connector="OR"), name="dops_rfi_due_ck"),
+                    models.CheckConstraint(condition=models.Q(("responded_at__isnull", True), ("responded_by_membership_public_id__isnull", False), _connector="OR"), name="dops_rfi_resp_ck"),
+                ],
+                "indexes": [
+                    models.Index(fields=["company", "status_code", "response_due_at"], name="dops_rfi_status_ix"),
+                    models.Index(fields=["company", "priority_code", "discipline_code"], name="dops_rfi_priority_ix"),
+                ],
+            },
+        ),
+        migrations.CreateModel(
+            name="TechnicalSubmittal",
+            fields=base_fields() + [
+                ("submittal_number", models.CharField(max_length=120)),
+                ("revision_number", models.PositiveIntegerField(default=1)),
+                ("project_public_id", models.UUIDField(blank=True, null=True)),
+                ("category_code", models.CharField(max_length=100)),
+                ("package_code", models.CharField(blank=True, max_length=120)),
+                ("status_code", models.CharField(max_length=80)),
+                ("title", models.CharField(max_length=300)),
+                ("description", models.TextField(blank=True)),
+                ("submitted_at", models.DateTimeField(blank=True, null=True)),
+                ("review_due_at", models.DateTimeField(blank=True, null=True)),
+                ("reviewed_at", models.DateTimeField(blank=True, null=True)),
+                ("submitted_by_membership_public_id", models.UUIDField()),
+                ("reviewer_membership_public_id", models.UUIDField(blank=True, null=True)),
+                ("decision_code", models.CharField(blank=True, max_length=80)),
+                ("decision_note", models.TextField(blank=True)),
+                ("linked_document_public_ids", models.JSONField(default=list)),
+                ("version", models.PositiveIntegerField(default=1)),
+                ("company", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name="technical_submittals", to="tenant.company")),
+                ("policy", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name="submittals", to="documentops.documentcontrolpolicyversion")),
+            ],
+            options={
+                "db_table": "documentops_submittal",
+                "constraints": [
+                    models.UniqueConstraint(fields=("company", "submittal_number", "revision_number"), name="dops_sub_no_rev_uq"),
+                    models.CheckConstraint(condition=models.Q(("revision_number__gte", 1)), name="dops_sub_rev_ck"),
+                    models.CheckConstraint(condition=models.Q(("review_due_at__isnull", True), ("submitted_at__isnull", True), ("review_due_at__gte", models.F("submitted_at")), _connector="OR"), name="dops_sub_due_ck"),
+                    models.CheckConstraint(condition=models.Q(("reviewed_at__isnull", True), ("reviewer_membership_public_id__isnull", False), _connector="OR"), name="dops_sub_review_ck"),
+                ],
+                "indexes": [
+                    models.Index(fields=["company", "status_code", "review_due_at"], name="dops_sub_status_ix"),
+                    models.Index(fields=["company", "category_code", "project_public_id"], name="dops_sub_category_ix"),
+                ],
+            },
+        ),
+        migrations.CreateModel(
+            name="DocumentApproval",
+            fields=base_fields() + [
+                ("entity_type_code", models.CharField(max_length=80)),
+                ("entity_public_id", models.UUIDField()),
+                ("step_code", models.CharField(max_length=100)),
+                ("status_code", models.CharField(max_length=80)),
+                ("requested_by_membership_public_id", models.UUIDField()),
+                ("requested_from_membership_public_id", models.UUIDField()),
+                ("requested_at", models.DateTimeField()),
+                ("due_at", models.DateTimeField(blank=True, null=True)),
+                ("decided_by_membership_public_id", models.UUIDField(blank=True, null=True)),
+                ("decided_at", models.DateTimeField(blank=True, null=True)),
+                ("decision_note", models.TextField(blank=True)),
+                ("version", models.PositiveIntegerField(default=1)),
+                ("company", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name="document_approvals", to="tenant.company")),
+                ("policy", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name="approvals", to="documentops.documentcontrolpolicyversion")),
+            ],
+            options={
+                "db_table": "documentops_approval",
+                "constraints": [
+                    models.UniqueConstraint(fields=("company", "entity_type_code", "entity_public_id", "step_code"), name="dops_appr_step_uq"),
+                    models.CheckConstraint(condition=models.Q(("decided_at__isnull", True), ("decided_by_membership_public_id__isnull", False), _connector="OR"), name="dops_appr_decide_ck"),
+                ],
+                "indexes": [models.Index(fields=["company", "status_code", "due_at"], name="dops_appr_due_ix")],
+            },
+        ),
+        migrations.CreateModel(
+            name="DocumentDistribution",
+            fields=base_fields() + [
+                ("recipient_type_code", models.CharField(max_length=80)),
+                ("recipient_public_id", models.UUIDField()),
+                ("purpose_code", models.CharField(max_length=100)),
+                ("status_code", models.CharField(max_length=80)),
+                ("distributed_at", models.DateTimeField()),
+                ("distributed_by_membership_public_id", models.UUIDField()),
+                ("acknowledged_at", models.DateTimeField(blank=True, null=True)),
+                ("revoked_at", models.DateTimeField(blank=True, null=True)),
+                ("note", models.TextField(blank=True)),
+                ("version", models.PositiveIntegerField(default=1)),
+                ("company", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name="document_distributions", to="tenant.company")),
+                ("policy", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name="distributions", to="documentops.documentcontrolpolicyversion")),
+                ("revision", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name="distributions", to="documentops.documentrevision")),
+            ],
+            options={
+                "db_table": "documentops_distribution",
+                "constraints": [
+                    models.UniqueConstraint(fields=("company", "revision", "recipient_type_code", "recipient_public_id", "purpose_code"), name="dops_dist_rec_uq"),
+                    models.CheckConstraint(condition=models.Q(("acknowledged_at__isnull", True), ("acknowledged_at__gte", models.F("distributed_at")), _connector="OR"), name="dops_dist_ack_ck"),
+                    models.CheckConstraint(condition=models.Q(("revoked_at__isnull", True), ("revoked_at__gte", models.F("distributed_at")), _connector="OR"), name="dops_dist_revoke_ck"),
+                ],
+                "indexes": [models.Index(fields=["company", "status_code", "distributed_at"], name="dops_dist_status_ix")],
+            },
+        ),
+        migrations.CreateModel(
+            name="DocumentRisk",
+            fields=base_fields() + [
+                ("linked_entity_type_code", models.CharField(max_length=80)),
+                ("linked_entity_public_id", models.UUIDField(blank=True, null=True)),
+                ("risk_code", models.CharField(max_length=100)),
+                ("severity_code", models.CharField(max_length=80)),
+                ("status_code", models.CharField(max_length=80)),
+                ("message", models.CharField(max_length=500)),
+                ("due_at", models.DateTimeField(blank=True, null=True)),
+                ("resolved_at", models.DateTimeField(blank=True, null=True)),
+                ("resolved_by_membership_public_id", models.UUIDField(blank=True, null=True)),
+                ("resolution_note", models.TextField(blank=True)),
+                ("version", models.PositiveIntegerField(default=1)),
+                ("company", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name="document_risks", to="tenant.company")),
+                ("policy", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name="risks", to="documentops.documentcontrolpolicyversion")),
+            ],
+            options={
+                "db_table": "documentops_risk",
+                "constraints": [models.CheckConstraint(condition=models.Q(("resolved_at__isnull", True), ("resolved_by_membership_public_id__isnull", False), _connector="OR"), name="dops_risk_resolve_ck")],
+                "indexes": [
+                    models.Index(fields=["company", "status_code", "severity_code"], name="dops_risk_status_ix"),
+                    models.Index(fields=["company", "linked_entity_type_code", "linked_entity_public_id"], name="dops_risk_entity_ix"),
+                ],
+            },
+        ),
+    ]

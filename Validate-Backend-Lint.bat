@@ -1,0 +1,27 @@
+@echo off
+setlocal
+set "ROOT=%~1"
+if not defined ROOT set "ROOT=%~dp0"
+for %%I in ("%ROOT%") do set "ROOT=%%~fI"
+
+set "PYTHON=%ROOT%\backend\.venv\Scripts\python.exe"
+if not exist "%PYTHON%" (
+  echo [ERROR] backend\.venv runtime missing.
+  exit /b 2
+)
+if not exist "%ROOT%\backend\.env.testing" (
+  echo [ERROR] backend\.env.testing missing.
+  exit /b 3
+)
+
+cd /d "%ROOT%\backend"
+set "BUILD360_ENVIRONMENT=testing"
+set "APP_ENV=test"
+set "APP_VERSION=1.0.0"
+set "DJANGO_ENV_FILE=backend\.env.testing"
+
+echo [INFO] Build360 v1.0.0 first-party backend Ruff gate.
+echo [SCOPE] build360 + modules only
+echo [BASELINE] E501 is non-blocking formatting debt; test S106 literals are test-only.
+"%PYTHON%" -m ruff check build360 modules
+exit /b %ERRORLEVEL%

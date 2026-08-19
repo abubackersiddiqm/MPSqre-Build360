@@ -1,0 +1,121 @@
+# Generated for MPSqre Build360 Phase 5 estimation and BOQ.
+import decimal
+import uuid
+
+import django.db.models.deletion
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+    initial = True
+    dependencies = [("projects", "0001_initial")]
+    operations = [
+        migrations.CreateModel(
+            name="Estimate",
+            fields=[
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("public_id", models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True, editable=False)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("code", models.CharField(max_length=80)),
+                ("name", models.CharField(max_length=250)),
+                ("currency", models.CharField(max_length=3)),
+                ("created_by_public_id", models.UUIDField()),
+                ("version", models.PositiveBigIntegerField(default=1)),
+                ("active_version_number", models.PositiveIntegerField(default=0)),
+                ("archived_at", models.DateTimeField(blank=True, null=True)),
+                ("company", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, to="tenant.company")),
+                ("project", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name="estimates", to="projects.project")),
+            ],
+            options={"db_table": "estimation_estimate"},
+        ),
+        migrations.CreateModel(
+            name="EstimateVersion",
+            fields=[
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("public_id", models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True, editable=False)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("version_number", models.PositiveIntegerField()),
+                ("notes", models.TextField(blank=True)),
+                ("subtotal", models.DecimalField(decimal_places=4, default=decimal.Decimal("0"), max_digits=19)),
+                ("tax_total", models.DecimalField(decimal_places=4, default=decimal.Decimal("0"), max_digits=19)),
+                ("grand_total", models.DecimalField(decimal_places=4, default=decimal.Decimal("0"), max_digits=19)),
+                ("created_by_public_id", models.UUIDField()),
+                ("submitted_at", models.DateTimeField(blank=True, null=True)),
+                ("approved_at", models.DateTimeField(blank=True, null=True)),
+                ("baselined_at", models.DateTimeField(blank=True, null=True)),
+                ("superseded_at", models.DateTimeField(blank=True, null=True)),
+                ("version", models.PositiveBigIntegerField(default=1)),
+                ("company", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, to="tenant.company")),
+                ("estimate", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name="versions", to="estimation.estimate")),
+                ("stage", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name="estimate_versions", to="projects.deliverystage")),
+            ],
+            options={"db_table": "estimation_version"},
+        ),
+        migrations.CreateModel(
+            name="BoqSection",
+            fields=[
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("public_id", models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True, editable=False)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("code", models.CharField(max_length=80)),
+                ("name", models.CharField(max_length=250)),
+                ("sort_order", models.PositiveIntegerField(default=100)),
+                ("company", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, to="tenant.company")),
+                ("estimate_version", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name="sections", to="estimation.estimateversion")),
+            ],
+            options={"db_table": "estimation_boq_section"},
+        ),
+        migrations.CreateModel(
+            name="BoqItem",
+            fields=[
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("public_id", models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True, editable=False)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("item_code", models.CharField(max_length=80)),
+                ("description", models.TextField()),
+                ("unit_code", models.CharField(max_length=40)),
+                ("quantity", models.DecimalField(decimal_places=4, max_digits=19)),
+                ("rate", models.DecimalField(decimal_places=4, max_digits=19)),
+                ("amount", models.DecimalField(decimal_places=4, max_digits=19)),
+                ("tax_rate_percent", models.DecimalField(decimal_places=4, default=decimal.Decimal("0"), max_digits=7)),
+                ("tax_amount", models.DecimalField(decimal_places=4, default=decimal.Decimal("0"), max_digits=19)),
+                ("total_amount", models.DecimalField(decimal_places=4, max_digits=19)),
+                ("sort_order", models.PositiveIntegerField(default=100)),
+                ("version", models.PositiveBigIntegerField(default=1)),
+                ("company", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, to="tenant.company")),
+                ("estimate_version", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name="items", to="estimation.estimateversion")),
+                ("section", models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name="items", to="estimation.boqsection")),
+            ],
+            options={"db_table": "estimation_boq_item"},
+        ),
+        migrations.CreateModel(
+            name="EstimateBaseline",
+            fields=[
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("public_id", models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True, editable=False)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("snapshot", models.JSONField(default=dict)),
+                ("created_by_public_id", models.UUIDField()),
+                ("company", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, to="tenant.company")),
+                ("estimate", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name="baselines", to="estimation.estimate")),
+                ("estimate_version", models.OneToOneField(on_delete=django.db.models.deletion.PROTECT, related_name="baseline_record", to="estimation.estimateversion")),
+            ],
+            options={"db_table": "estimation_baseline"},
+        ),
+        migrations.AddConstraint(model_name="estimate", constraint=models.UniqueConstraint(fields=("company", "project", "code"), name="est_project_code_uq")),
+        migrations.AddIndex(model_name="estimate", index=models.Index(fields=["company", "project", "archived_at"], name="est_project_lookup_idx")),
+        migrations.AddConstraint(model_name="estimateversion", constraint=models.UniqueConstraint(fields=("company", "estimate", "version_number"), name="est_version_number_uq")),
+        migrations.AddConstraint(model_name="estimateversion", constraint=models.CheckConstraint(condition=models.Q(("subtotal__gte", 0), ("tax_total__gte", 0), ("grand_total__gte", 0)), name="est_totals_nonnegative")),
+        migrations.AddIndex(model_name="estimateversion", index=models.Index(fields=["company", "estimate", "stage", "version_number"], name="est_version_lookup_idx")),
+        migrations.AddConstraint(model_name="boqsection", constraint=models.UniqueConstraint(fields=("company", "estimate_version", "code"), name="est_section_code_uq")),
+        migrations.AddIndex(model_name="boqsection", index=models.Index(fields=["company", "estimate_version", "sort_order"], name="est_section_order_idx")),
+        migrations.AddConstraint(model_name="boqitem", constraint=models.UniqueConstraint(fields=("company", "estimate_version", "item_code"), name="est_item_code_uq")),
+        migrations.AddConstraint(model_name="boqitem", constraint=models.CheckConstraint(condition=models.Q(("quantity__gte", 0), ("rate__gte", 0), ("amount__gte", 0), ("tax_rate_percent__gte", 0), ("tax_rate_percent__lte", 100), ("total_amount__gte", 0)), name="est_item_values_valid")),
+        migrations.AddIndex(model_name="boqitem", index=models.Index(fields=["company", "estimate_version", "section", "sort_order"], name="est_item_order_idx")),
+        migrations.AddConstraint(model_name="estimatebaseline", constraint=models.UniqueConstraint(fields=("company", "estimate", "estimate_version"), name="est_baseline_version_uq")),
+    ]

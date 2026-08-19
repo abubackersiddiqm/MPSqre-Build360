@@ -1,0 +1,43 @@
+from django.urls import path
+
+from .views import (
+    CommitmentCreateView,
+    CommitmentTransitionView,
+    CovenantCreateView,
+    CovenantTransitionView,
+    DebtFacilityCreateView,
+    DebtFacilityTransitionView,
+    DistributionCreateView,
+    DistributionTransitionView,
+    DrawdownCreateView,
+    DrawdownTransitionView,
+    EventCreateView,
+    InvestorCreateView,
+    InvestorTransitionView,
+    JointVentureCreateView,
+    JointVentureTransitionView,
+    OverviewView,
+    ProgramCreateView,
+    ProgramTransitionView,
+)
+
+urlpatterns = [
+    path("overview", OverviewView.as_view(), name="capitalops-overview"),
+    path("programs", ProgramCreateView.as_view(), name="capitalops-program-create"),
+    path("programs/<uuid:program_id>/transition", ProgramTransitionView.as_view(), name="capitalops-program-transition"),
+    path("investors", InvestorCreateView.as_view(), name="capitalops-investor-create"),
+    path("investors/<uuid:investor_id>/transition", InvestorTransitionView.as_view(), name="capitalops-investor-transition"),
+    path("joint-ventures", JointVentureCreateView.as_view(), name="capitalops-jv-create"),
+    path("joint-ventures/<uuid:venture_id>/transition", JointVentureTransitionView.as_view(), name="capitalops-jv-transition"),
+    path("commitments", CommitmentCreateView.as_view(), name="capitalops-commitment-create"),
+    path("commitments/<uuid:commitment_id>/transition", CommitmentTransitionView.as_view(), name="capitalops-commitment-transition"),
+    path("facilities", DebtFacilityCreateView.as_view(), name="capitalops-facility-create"),
+    path("facilities/<uuid:facility_id>/transition", DebtFacilityTransitionView.as_view(), name="capitalops-facility-transition"),
+    path("drawdowns", DrawdownCreateView.as_view(), name="capitalops-drawdown-create"),
+    path("drawdowns/<uuid:drawdown_id>/transition", DrawdownTransitionView.as_view(), name="capitalops-drawdown-transition"),
+    path("covenants", CovenantCreateView.as_view(), name="capitalops-covenant-create"),
+    path("covenants/<uuid:test_id>/transition", CovenantTransitionView.as_view(), name="capitalops-covenant-transition"),
+    path("distributions", DistributionCreateView.as_view(), name="capitalops-distribution-create"),
+    path("distributions/<uuid:distribution_id>/transition", DistributionTransitionView.as_view(), name="capitalops-distribution-transition"),
+    path("events", EventCreateView.as_view(), name="capitalops-event-create"),
+]

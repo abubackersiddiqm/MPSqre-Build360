@@ -1,0 +1,67 @@
+[build-system]
+requires = ["setuptools>=80"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mpsqre-build360-backend"
+version = "1.0.0"
+description = "MPSqre Build360 modular-monolith API"
+requires-python = ">=3.14,<3.15"
+dependencies = [
+  "argon2-cffi==25.1.0",
+  "boto3==1.43.59",
+  "celery==5.6.3",
+  "cryptography==49.0.0",
+  "Django==6.0.7",
+  "django-cors-headers==4.9.0",
+  "djangorestframework==3.17.1",
+  "gunicorn==26.0.0",
+  "psycopg[binary]==3.3.4",
+  "PyJWT==2.13.0",
+  "python-dotenv==1.2.2",
+  "redis==8.0.1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "django-stubs==6.0.7",
+  "djangorestframework-stubs==3.17.1",
+  "mypy==2.3.0",
+  "pytest==9.1.1",
+  "pytest-django==4.12.0",
+  "ruff==0.16.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["build360*", "modules*"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "build360.settings"
+python_files = ["test_*.py"]
+addopts = "-q --strict-markers"
+
+[tool.ruff]
+target-version = "py314"
+line-length = 100
+extend-exclude = ["**/migrations/*.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S", "DJ"]
+ignore = ["S101", "DJ008", "E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/*.py" = ["S106"]
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+warn_unreachable = true
+exclude = ["migrations"]
+plugins = ["mypy_django_plugin.main", "mypy_drf_plugin.main"]
+
+[tool.django-stubs]
+django_settings_module = "build360.settings"
+
+[[tool.mypy.overrides]]
+module = ["boto3", "boto3.*", "botocore", "botocore.*", "celery", "celery.*"]
+ignore_missing_imports = true

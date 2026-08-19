@@ -1,0 +1,41 @@
+from django.urls import path
+
+from .views import (
+    ApprovalCreateView,
+    ApprovalTransitionView,
+    DiligenceCreateView,
+    DiligenceTransitionView,
+    EventCreateView,
+    FeasibilityCreateView,
+    FeasibilityTransitionView,
+    OfferCreateView,
+    OfferTransitionView,
+    OpportunityCreateView,
+    OpportunityTransitionView,
+    OverviewView,
+    OwnershipCreateView,
+    OwnershipTransitionView,
+    ParcelCreateView,
+    RiskCreateView,
+    RiskTransitionView,
+)
+
+urlpatterns = [
+    path("overview", OverviewView.as_view(), name="landops-overview"),
+    path("parcels", ParcelCreateView.as_view(), name="landops-parcel-create"),
+    path("ownerships", OwnershipCreateView.as_view(), name="landops-owner-create"),
+    path("ownerships/<uuid:ownership_id>/transition", OwnershipTransitionView.as_view(), name="landops-owner-transition"),
+    path("diligence", DiligenceCreateView.as_view(), name="landops-diligence-create"),
+    path("diligence/<uuid:case_id>/transition", DiligenceTransitionView.as_view(), name="landops-diligence-transition"),
+    path("feasibilities", FeasibilityCreateView.as_view(), name="landops-feasibility-create"),
+    path("feasibilities/<uuid:scenario_id>/transition", FeasibilityTransitionView.as_view(), name="landops-feasibility-transition"),
+    path("opportunities", OpportunityCreateView.as_view(), name="landops-opportunity-create"),
+    path("opportunities/<uuid:opportunity_id>/transition", OpportunityTransitionView.as_view(), name="landops-opportunity-transition"),
+    path("offers", OfferCreateView.as_view(), name="landops-offer-create"),
+    path("offers/<uuid:offer_id>/transition", OfferTransitionView.as_view(), name="landops-offer-transition"),
+    path("approvals", ApprovalCreateView.as_view(), name="landops-approval-create"),
+    path("approvals/<uuid:approval_id>/transition", ApprovalTransitionView.as_view(), name="landops-approval-transition"),
+    path("risks", RiskCreateView.as_view(), name="landops-risk-create"),
+    path("risks/<uuid:risk_id>/transition", RiskTransitionView.as_view(), name="landops-risk-transition"),
+    path("events", EventCreateView.as_view(), name="landops-event-create"),
+]

@@ -1,0 +1,53 @@
+name: Build360 Release Evidence
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Governed target environment
+        required: true
+        type: choice
+        options: [staging, production]
+      version:
+        description: Release version
+        required: true
+        type: string
+      source_revision:
+        description: Git revision or build ID
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: build360-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate version marker
+        run: |
+          test "$(tr -d '\r\n' < .build360-version)" = "${{ inputs.version }}"
+      - name: Build source evidence
+        run: |
+          git archive --format=tar.gz --output=build360-${{ inputs.version }}.tar.gz HEAD
+          sha256sum build360-${{ inputs.version }}.tar.gz > artifact-sha256.txt
+          printf '%s\n' \
+            "environment=${{ inputs.environment }}" \
+            "version=${{ inputs.version }}" \
+            "source_revision=${{ inputs.source_revision }}" \
+            "workflow_run=${{ github.run_id }}" > release-evidence.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build360-release-${{ inputs.version }}-${{ inputs.environment }}
+          path: |
+            build360-${{ inputs.version }}.tar.gz
+            artifact-sha256.txt
+            release-evidence.txt
+          retention-days: 30

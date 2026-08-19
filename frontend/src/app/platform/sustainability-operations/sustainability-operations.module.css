@@ -1,0 +1,60 @@
+.page { min-height:100%; padding:64px 48px 96px; color:#0d2341; background:radial-gradient(circle at 100% 0%,rgba(194,244,226,.58),transparent 34%),linear-gradient(180deg,#f7fbfa 0%,#f3f7f8 100%); }
+.loading { min-height:70vh; display:grid; place-items:center; padding:40px; color:#17304d; background:#f5f8f9; font-size:18px; }
+.errorCard { width:min(900px,100%); padding:38px; border:1px solid #efc7bb; border-radius:22px; background:#fff; box-shadow:0 16px 50px rgba(14,35,65,.08); }
+.errorCard span,.kicker,.eyebrow { color:#00644f; font-size:12px; font-weight:900; letter-spacing:.18em; text-transform:uppercase; }
+.errorCard h1 { margin:12px 0; font-size:30px; }
+.errorCard p { color:#60738b; }
+.errorCard button,.heroActions button,.card button { border:0; border-radius:12px; padding:13px 18px; background:#006b55; color:#fff; font:inherit; font-weight:800; cursor:pointer; }
+.errorCard button:disabled,.heroActions button:disabled,.card button:disabled { cursor:not-allowed; opacity:.6; }
+.hero { display:flex; align-items:flex-end; justify-content:space-between; gap:38px; padding-bottom:34px; border-bottom:1px solid #d9e5e4; }
+.hero h1 { margin:10px 0 12px; max-width:940px; font-size:clamp(48px,5.5vw,82px); font-weight:500; line-height:.98; letter-spacing:-.055em; }
+.subtitle { max-width:920px; margin:0; color:#536a84; font-size:19px; line-height:1.55; }
+.chips { display:flex; flex-wrap:wrap; gap:9px; margin-top:22px; }
+.chips span { padding:9px 13px; border:1px solid #d3e0e2; border-radius:999px; background:rgba(255,255,255,.8); color:#183a4e; font-size:13px; font-weight:800; }
+.heroActions { min-width:300px; display:grid; justify-items:end; gap:14px; }
+.activeBadge { max-width:360px; padding:11px 16px; border-radius:999px; background:#d9f5e9; color:#005d48; font-size:12px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; }
+.metrics { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:14px; margin:28px 0; }
+.metric { min-height:136px; padding:22px; border:1px solid #d7e1e5; border-radius:19px; background:rgba(255,255,255,.92); box-shadow:0 8px 24px rgba(22,52,72,.05); }
+.metric span,.metric small { display:block; color:#64778f; }
+.metric strong { display:block; margin:17px 0 10px; color:#0d2848; font-size:30px; line-height:1; }
+.metric small { font-size:12px; line-height:1.4; }
+.tabs { display:flex; gap:4px; overflow:auto; margin:0 0 28px; padding:6px; border-radius:16px; background:#e5edef; }
+.tabs button { flex:0 0 auto; border:0; border-radius:11px; padding:14px 18px; background:transparent; color:#183450; font:inherit; font-weight:800; cursor:pointer; }
+.tabs .tabActive { background:#fff; color:#00644f; box-shadow:0 2px 8px rgba(25,55,70,.08); }
+.grid { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:22px; }
+.card { padding:26px; border:1px solid #d6e1e4; border-radius:20px; background:rgba(255,255,255,.94); box-shadow:0 10px 30px rgba(18,48,70,.05); }
+.card h2 { margin:8px 0 19px; color:#112d4d; font-size:27px; font-weight:550; letter-spacing:-.025em; }
+.card button { margin-top:16px; }
+.smallButton { margin-top:0!important; padding:8px 10px!important; border-radius:8px!important; font-size:12px!important; white-space:nowrap; }
+.wide { grid-column:1 / -1; }
+.formGrid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+.formGrid label,.inlineForm label { display:grid; gap:7px; color:#29445f; font-size:12px; font-weight:800; }
+.formGrid input,.formGrid select,.formGrid textarea,.inlineForm input,.inlineForm select { width:100%; min-width:0; border:1px solid #ccdadd; border-radius:11px; padding:11px 12px; background:#fff; color:#102b48; font:inherit; outline:none; }
+.formGrid input:focus,.formGrid select:focus,.formGrid textarea:focus,.inlineForm input:focus,.inlineForm select:focus { border-color:#05866b; box-shadow:0 0 0 3px rgba(5,134,107,.12); }
+.formGrid textarea { min-height:92px; resize:vertical; }
+.full { grid-column:1 / -1; }
+.inlineForm { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)) auto; gap:14px; align-items:end; }
+.inlineForm button { margin:0; white-space:nowrap; }
+.tableWrap { width:100%; overflow:auto; border:1px solid #dbe4e7; border-radius:14px; }
+.tableWrap table { width:100%; border-collapse:collapse; min-width:860px; }
+.tableWrap th,.tableWrap td { padding:13px 14px; border-bottom:1px solid #e3eaed; text-align:left; vertical-align:top; }
+.tableWrap th { background:#f1f6f5; color:#526b78; font-size:11px; letter-spacing:.08em; text-transform:uppercase; }
+.tableWrap td { color:#18344e; font-size:13px; }
+.tableWrap td strong,.tableWrap td small { display:block; }
+.tableWrap td small { margin-top:4px; color:#728197; }
+.pill { display:inline-block; border-radius:999px; background:#e0f4ee; padding:6px 9px; color:#005944; font-size:11px; font-weight:800; white-space:nowrap; }
+.list { display:grid; gap:11px; }
+.list > div { padding:14px; border:1px solid #dbe4e7; border-radius:13px; background:#fbfdfd; }
+.list strong,.list small { display:block; }
+.list small { margin-top:5px; color:#667991; line-height:1.45; }
+.definition { display:grid; gap:0; margin:0; }
+.definition div { display:flex; justify-content:space-between; gap:20px; padding:12px 0; border-bottom:1px solid #e3eaed; }
+.definition dt { color:#60728a; }
+.definition dd { margin:0; font-weight:800; text-align:right; }
+.empty { color:#6f8095; }
+.bannerError,.bannerSuccess { margin:18px 0; padding:13px 16px; border-radius:12px; font-weight:700; }
+.bannerError { background:#fff0ec; color:#9d2e18; }
+.bannerSuccess { background:#e6f7ef; color:#00624f; }
+@media (max-width:1250px) { .metrics { grid-template-columns:repeat(3,minmax(0,1fr)); } .inlineForm { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media (max-width:900px) { .page { padding:34px 24px 72px; } .hero { align-items:flex-start; flex-direction:column; } .heroActions { justify-items:start; } .grid { grid-template-columns:1fr; } .wide { grid-column:auto; } }
+@media (max-width:650px) { .metrics { grid-template-columns:repeat(2,minmax(0,1fr)); } .formGrid,.inlineForm { grid-template-columns:1fr; } .full { grid-column:auto; } }

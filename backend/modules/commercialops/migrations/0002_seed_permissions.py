@@ -1,0 +1,54 @@
+from django.db import migrations
+
+
+PERMISSIONS = (
+    ("commercial.view", "View tenant contracts, variations, payments, claims, EOT, approvals and commercial risk"),
+    ("commercial.manage", "Manage commercial governance, approvals and risk controls"),
+    ("commercial.contract", "Create and operate contracts and commercial milestones"),
+    ("commercial.change", "Create, assess and govern variations and change orders"),
+    ("commercial.payment", "Create and certify payment applications and commercial deductions"),
+    ("commercial.claim", "Raise, assess and resolve claims and extensions of time"),
+    ("commercial.approve", "Approve commercial transitions with maker-checker controls"),
+    ("commercial.configure", "Create versioned tenant commercial policies"),
+    ("commercial.export", "Generate governed contract, payment, claim and audit exports"),
+)
+
+
+def seed_permissions(apps, schema_editor):
+    Permission = apps.get_model("identity", "Permission")
+    Role = apps.get_model("identity", "Role")
+    RolePermission = apps.get_model("identity", "RolePermission")
+
+    permissions = []
+    for code, description in PERMISSIONS:
+        permission, _ = Permission.objects.get_or_create(
+            code=code,
+            defaults={
+                "description": description,
+                "data_class": "commercial_restricted",
+            },
+        )
+        permissions.append(permission)
+
+    for role in Role.objects.filter(code="company_administrator").iterator():
+        for permission in permissions:
+            RolePermission.objects.get_or_create(role=role, permission=permission)
+
+
+def remove_permissions(apps, schema_editor):
+    Permission = apps.get_model("identity", "Permission")
+    RolePermission = apps.get_model("identity", "RolePermission")
+    permission_ids = Permission.objects.filter(
+        code__in=[code for code, _ in PERMISSIONS]
+    ).values_list("id", flat=True)
+    RolePermission.objects.filter(permission_id__in=permission_ids).delete()
+    Permission.objects.filter(id__in=permission_ids).delete()
+
+
+class Migration(migrations.Migration):
+    dependencies = [
+        ("identity", "0002_remove_user_is_staff_remove_user_is_superuser"),
+        ("commercialops", "0001_initial"),
+    ]
+
+    operations = [migrations.RunPython(seed_permissions, remove_permissions)]
