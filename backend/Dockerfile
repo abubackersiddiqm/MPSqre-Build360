@@ -13,8 +13,11 @@ COPY pyproject.toml ./
 COPY build360 ./build360
 COPY modules ./modules
 COPY manage.py ./
+COPY ops ./ops
 RUN python -m pip install --upgrade pip \
-    && python -m pip install ".[dev]"
+    && python -m pip install ".[dev]" \
+    && mkdir -p /app/.gunicorn \
+    && chown build360:build360 /app/.gunicorn
 
 USER build360
 EXPOSE 8000

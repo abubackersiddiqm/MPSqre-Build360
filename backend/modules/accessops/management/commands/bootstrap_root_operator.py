@@ -38,6 +38,14 @@ class Command(BaseCommand):
             action="store_true",
             help="Verify an active ROOT_OPERATOR exists without mutating data.",
         )
+        parser.add_argument(
+            "--password-env",
+            help=(
+                "Read the bootstrap password from this environment-variable name. "
+                "Designed for non-interactive one-time deployment bootstrap; the "
+                "password value is never accepted as a command-line argument."
+            ),
+        )
 
     def handle(self, *args: Any, **options: Any) -> None:
         environment = str(
@@ -128,8 +136,17 @@ class Command(BaseCommand):
                 or "Build360 Root Operator"
             )
 
-        password = getpass.getpass("Password (minimum 14 characters): ")
-        password_confirm = getpass.getpass("Confirm password: ")
+        password_env_name = str(options.get("password_env") or "").strip()
+        if password_env_name:
+            password = os.getenv(password_env_name, "")
+            if not password:
+                raise CommandError(
+                    f"Password environment variable '{password_env_name}' is missing or empty."
+                )
+            password_confirm = password
+        else:
+            password = getpass.getpass("Password (minimum 14 characters): ")
+            password_confirm = getpass.getpass("Confirm password: ")
 
         if password != password_confirm:
             raise CommandError("Passwords do not match.")
