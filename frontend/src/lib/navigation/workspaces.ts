@@ -309,6 +309,8 @@ export type WorkspaceAccessContext = {
   platformOperator: boolean;
 };
 
+export type WorkspaceAccessLevel = "NONE" | "VIEW" | "EDIT" | "FULL";
+
 export function canAccessWorkspace(
   workspace: WorkspaceDefinition,
   context: WorkspaceAccessContext,
@@ -329,6 +331,111 @@ export function canAccessWorkspace(
   return workspace.requireAllPermissions
     ? workspace.permissions.every((permission) => permissionSet.has(permission))
     : workspace.permissions.some((permission) => permissionSet.has(permission));
+}
+
+const WORKSPACE_READ_TERMS = new Set(["read", "view", "list"]);
+const WORKSPACE_EDIT_TERMS = new Set([
+  "manage",
+  "create",
+  "update",
+  "write",
+  "edit",
+  "add",
+  "upload",
+  "comment",
+  "record",
+  "complete",
+  "schedule",
+  "submit",
+  "send",
+  "respond",
+  "acknowledge",
+]);
+const WORKSPACE_SENSITIVE_TERMS = new Set([
+  "approve",
+  "approval",
+  "reject",
+  "delete",
+  "remove",
+  "reveal",
+  "assign",
+  "transition",
+  "convert",
+  "override",
+  "publish",
+  "void",
+  "refund",
+  "impersonate",
+  "rotate",
+  "restore",
+  "admin",
+  "permission",
+  "role",
+]);
+
+function permissionTerms(code: string): Set<string> {
+  return new Set(
+    code
+      .replaceAll("-", ".")
+      .split(".")
+      .map((part) => part.trim().toLowerCase())
+      .filter(Boolean),
+  );
+}
+
+function intersects(left: Set<string>, right: Set<string>): boolean {
+  for (const item of left) {
+    if (right.has(item)) return true;
+  }
+  return false;
+}
+
+export function workspaceAccessLevel(
+  workspace: WorkspaceDefinition,
+  context: WorkspaceAccessContext,
+): WorkspaceAccessLevel {
+  if (!canAccessWorkspace(workspace, context)) return "NONE";
+
+  // Workspaces without a tenant permission contract are shell/admin surfaces.
+  // If canAccessWorkspace() admitted the caller, do not invent a weaker level.
+  if (!workspace.permissions?.length) return "FULL";
+
+  const namespaces = new Set(
+    workspace.permissions
+      .map((permission) => permission.split(".", 1)[0]?.trim())
+      .filter((value): value is string => Boolean(value)),
+  );
+  const relevantPermissions = context.permissions.filter((permission) => {
+    const namespace = permission.split(".", 1)[0]?.trim();
+    return Boolean(namespace && namespaces.has(namespace));
+  });
+
+  if (
+    relevantPermissions.some((permission) =>
+      intersects(permissionTerms(permission), WORKSPACE_SENSITIVE_TERMS),
+    )
+  ) {
+    return "FULL";
+  }
+  if (
+    relevantPermissions.some((permission) =>
+      intersects(permissionTerms(permission), WORKSPACE_EDIT_TERMS),
+    )
+  ) {
+    return "EDIT";
+  }
+  if (
+    relevantPermissions.some((permission) =>
+      intersects(permissionTerms(permission), WORKSPACE_READ_TERMS),
+    )
+  ) {
+    return "VIEW";
+  }
+
+  // canAccessWorkspace() already proved at least one declared capability. Some
+  // decision-only workspaces use verbs such as "decide"; treat those as FULL
+  // rather than incorrectly labelling them as read-only.
+  return "FULL";
 }
 
 export function visibleWorkspaces(

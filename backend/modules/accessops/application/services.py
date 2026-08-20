@@ -629,7 +629,16 @@ def reconcile_standard_company_access(
         at=now,
     )
 
+    from modules.accessops.application.managed_access import reconcile_managed_access_roles
+
+    managed_roles_reconciled = reconcile_managed_access_roles(
+        company=locked_company,
+        actor_public_id=actor_public_id,
+        correlation_id=correlation_id,
+    )
+
     summary = {
+        "managed_access_roles_reconciled": managed_roles_reconciled,
         "active_memberships": len(active_memberships),
         "admin_memberships": len(admin_membership_ids),
         "admin_assignments_added": assigned_admin,
@@ -998,6 +1007,138 @@ def replace_membership_roles(
         after={"role_public_ids": [str(role.public_id) for role in roles]},
         aggregate_version=int(now.timestamp() * 1_000_000),
     )
+
+
+@transaction.atomic
+def transfer_primary_company_admin(
+    *,
+    company: Company,
+    membership: Membership,
+    actor_public_id: uuid.UUID,
+    correlation_id: uuid.UUID,
+    reason_code: str,
+) -> dict[str, object]:
+    # Atomically transfer the single primary Company Administrator designation.
+    normalized_reason = reason_code.strip()
+    if not normalized_reason:
+        raise ValidationError("A reason code is required to change the primary administrator")
+
+    locked_company = Company.objects.select_for_update().get(pk=company.pk)
+    profile = CompanyAccessProfile.objects.select_for_update().filter(company=locked_company).first()
+    if profile is None:
+        raise ValidationError("Company access profile is not provisioned")
+
+    now = timezone.now()
+    target = (
+        Membership.objects.select_for_update()
+        .select_related("user", "company")
+        .filter(
+            pk=membership.pk,
+            company=locked_company,
+            effective_from__lte=now,
+            suspended_at__isnull=True,
+            terminated_at__isnull=True,
+            user__is_active=True,
+        )
+        .filter(Q(effective_to__isnull=True) | Q(effective_to__gt=now))
+        .first()
+    )
+    if target is None:
+        raise ValidationError("The new administrator must be an active user of this company")
+
+    target_email = target.user.email.strip().lower()
+    previous_email = profile.primary_admin_email.strip().lower()
+    if previous_email == target_email:
+        return {
+            "changed": False,
+            "previous_primary_admin_email": previous_email,
+            "primary_admin_email": target_email,
+            "membership_public_id": str(target.public_id),
+        }
+
+    admin_role = current_company_admin_role(locked_company)
+    user_role = current_company_user_role(locked_company)
+    if admin_role is None or user_role is None:
+        raise ValidationError(
+            "Standard Company Administrator/User roles are not provisioned. Re-apply the company SaaS package first."
+        )
+
+    _ensure_membership_has_role(
+        membership=target,
+        role=user_role,
+        actor_public_id=actor_public_id,
+        correlation_id=correlation_id,
+        at=now,
+    )
+    _ensure_membership_has_role(
+        membership=target,
+        role=admin_role,
+        actor_public_id=actor_public_id,
+        correlation_id=correlation_id,
+        at=now,
+    )
+
+    previous_membership = None
+    if previous_email:
+        previous_membership = (
+            Membership.objects.select_for_update()
+            .select_related("user")
+            .filter(company=locked_company, user__email__iexact=previous_email)
+            .first()
+        )
+
+    if previous_membership is not None and previous_membership.pk != target.pk:
+        admin_role_ids = list(
+            Role.objects.filter(company_public_id=locked_company.public_id)
+            .filter(
+                Q(code=STANDARD_COMPANY_ADMIN_ROLE_CODE)
+                | Q(code__in=LEGACY_COMPANY_ADMIN_ROLE_CODES)
+                | Q(name__iexact="Company Administrator")
+            )
+            .values_list("public_id", flat=True)
+        )
+        MembershipRole.objects.filter(
+            membership=previous_membership,
+            role_public_id__in=admin_role_ids,
+            effective_from__lte=now,
+        ).filter(Q(effective_to__isnull=True) | Q(effective_to__gt=now)).update(effective_to=now)
+
+    profile.primary_admin_email = target_email
+    profile.onboarding_status_code = "ADMIN_ACTIVE"
+    profile.activated_at = now
+    profile.version += 1
+    profile.save(
+        update_fields=[
+            "primary_admin_email",
+            "onboarding_status_code",
+            "activated_at",
+            "version",
+            "updated_at",
+        ]
+    )
+
+    result = {
+        "changed": True,
+        "previous_primary_admin_email": previous_email,
+        "primary_admin_email": target_email,
+        "membership_public_id": str(target.public_id),
+    }
+    _audit_and_event(
+        action="platform.primary_admin.transferred",
+        event_type="platform.primary_admin_transferred",
+        entity_type="company",
+        entity_public_id=locked_company.public_id,
+        actor_public_id=actor_public_id,
+        company_public_id=locked_company.public_id,
+        correlation_id=correlation_id,
+        before={"primary_admin_email": previous_email},
+        after=result,
+        reason_code=normalized_reason,
+        actor_type="platform_operator",
+        aggregate_version=profile.version,
+        event_payload=result,
+    )
+    return result
 
 
 @transaction.atomic

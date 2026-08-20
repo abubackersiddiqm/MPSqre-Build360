@@ -403,6 +403,29 @@ export function CrmWorkspace(initial: Readonly<Props>) {
 
   const can = (permission: string) => initial.permissions.includes(permission);
   const feature = (code: string) => initial.features[code] === true;
+  const crmEditPermissions = [
+    "crm.customer.manage",
+    "crm.contact.manage",
+    "crm.lead.manage",
+    "crm.opportunity.manage",
+    "crm.activity.manage",
+    "crm.stage.manage",
+    "crm.automation.manage",
+    "crm.configuration.manage",
+  ];
+  const crmSensitivePermissions = [
+    "crm.contact.reveal",
+    "crm.lead.assign",
+    "crm.lead.transition",
+    "crm.lead.convert",
+    "crm.opportunity.assign",
+    "crm.opportunity.transition",
+  ];
+  const crmHasEdit = crmEditPermissions.some(can);
+  const crmHasSensitive = crmSensitivePermissions.some(can);
+  const crmAccessMode = crmHasSensitive ? "FULL" : crmHasEdit ? "EDIT" : "VIEW";
+  const crmAccessLabel = crmAccessMode === "FULL" ? "Full access" : crmAccessMode === "EDIT" ? "Read + edit" : "View only";
+  const crmReadOnly = crmAccessMode === "VIEW";
   const canOpenCrmSetup = can("access.user.manage") && can("crm.configuration.read");
   const canManageCrmSetup = can("access.user.manage") && can("crm.configuration.manage");
   useEffect(() => {
@@ -479,6 +502,7 @@ export function CrmWorkspace(initial: Readonly<Props>) {
 
   async function submitContact(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!can("crm.contact.manage")) { setError("This CRM access is view-only for contacts."); return; }
     setBusy(true);
     setError("");
     setNotice("");
@@ -573,6 +597,7 @@ export function CrmWorkspace(initial: Readonly<Props>) {
   }
 
   async function convertContactToLead(contact: Contact) {
+    if (!can("crm.lead.manage")) { setError("Lead creation permission is required."); return; }
     setBusy(true); setError(""); setNotice("");
     try {
       const lead = await crmRequest<Lead & { created: boolean }>(`contacts/${contact.public_id}/convert-lead`, {
@@ -640,6 +665,7 @@ export function CrmWorkspace(initial: Readonly<Props>) {
 
   async function submitLead(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!can("crm.lead.manage")) { setError("This CRM access is view-only for leads."); return; }
     setBusy(true);
     setError("");
     const form = new FormData(event.currentTarget);
@@ -678,6 +704,7 @@ export function CrmWorkspace(initial: Readonly<Props>) {
 
   async function submitCustomer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!can("crm.customer.manage")) { setError("This CRM access is view-only for customers."); return; }
     setBusy(true);
     setError("");
     const form = new FormData(event.currentTarget);
@@ -706,6 +733,7 @@ export function CrmWorkspace(initial: Readonly<Props>) {
 
   async function submitActivity(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!can("crm.activity.manage")) { setError("This CRM access is view-only for activities."); return; }
     setBusy(true);
     setError("");
     const form = new FormData(event.currentTarget);
@@ -741,6 +769,7 @@ export function CrmWorkspace(initial: Readonly<Props>) {
   }
 
   async function transitionLead(lead: Lead, target: PipelineStage) {
+    if (!can("crm.lead.transition")) { setError("Lead transition permission is required."); return; }
     setBusy(true);
     setError("");
     try {
@@ -761,6 +790,7 @@ export function CrmWorkspace(initial: Readonly<Props>) {
   }
 
   async function convert(lead: Lead) {
+    if (!can("crm.lead.convert")) { setError("Lead conversion permission is required."); return; }
     setBusy(true);
     setError("");
     try {
@@ -778,6 +808,7 @@ export function CrmWorkspace(initial: Readonly<Props>) {
   }
 
   async function createProjectFromOpportunity(opportunity: Opportunity, preconstruction = false) {
+    if (!feature("module.delivery") || !can("crm.opportunity.manage") || !can("project.project.manage")) { setError("Project handoff permission is required."); return; }
     setBusy(true);
     setError("");
     setNotice("");
@@ -801,6 +832,7 @@ export function CrmWorkspace(initial: Readonly<Props>) {
   }
 
   async function transitionOpportunity(opportunity: Opportunity, target: PipelineStage) {
+    if (!can("crm.opportunity.transition")) { setError("Opportunity transition permission is required."); return; }
     setBusy(true);
     setError("");
     try {
@@ -830,13 +862,16 @@ export function CrmWorkspace(initial: Readonly<Props>) {
               <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">Customer relationships & revenue</h1>
               <p className="mt-2 text-sm text-[var(--muted)]">{initial.company.display_name} · One person, one relationship story · {initial.company.timezone}</p>
             </div>
-            <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap">
+            <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
+              <span aria-label="CRM access level" className={`col-span-2 inline-flex items-center justify-center rounded-lg border px-3 py-2 text-xs font-bold uppercase tracking-wide sm:col-span-1 ${crmAccessMode === "FULL" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : crmAccessMode === "EDIT" ? "border-[var(--brand)]/20 bg-[var(--brand-soft)] text-[var(--brand)]" : "border-slate-200 bg-slate-50 text-slate-600"}`}>{crmAccessLabel}</span>
               <button className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm font-semibold disabled:opacity-50" disabled={busy} onClick={refresh} type="button">{busy ? "Working…" : "Refresh"}</button>
               <Link className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm font-semibold" href="/platform">Back to workspace</Link>
               {can("crm.lead.manage") ? <button className="col-span-2 rounded-lg bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white sm:col-span-1" onClick={() => setShowLeadForm(true)} type="button">{`New ${term("lead", "Lead")}`}</button> : null}
             </div>
           </div>
         </header>
+
+        {crmReadOnly ? <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700" role="status"><strong className="font-semibold text-slate-900">View-only CRM access.</strong>{" "}You can review CRM records, but create, edit, reveal, transition and conversion actions are disabled.</div> : null}
 
         {handoffResult ? (
           <CrmOpportunityHandoffPanel

@@ -4,6 +4,7 @@ import { cache } from "react";
 import { headers } from "next/headers";
 
 import { backendUrl } from "@/lib/auth/server-session";
+import { normalizeRequestHost, shouldResolveTenantDomainBrand } from "./domain-host";
 
 export type DomainBrand = {
   company: {
@@ -33,16 +34,41 @@ export type DomainBrand = {
 export const domainBrandForCurrentHost = cache(async (): Promise<DomainBrand | null> => {
   const headerStore = await headers();
   const rawHost = headerStore.get("x-forwarded-host") ?? headerStore.get("host") ?? "";
-  const host = rawHost.split(",", 1)[0]?.trim().split(":", 1)[0]?.toLowerCase() ?? "";
-  if (!host || host === "localhost" || host === "127.0.0.1") return null;
+  const host = normalizeRequestHost(rawHost);
 
+  if (
+    !shouldResolveTenantDomainBrand(host, {
+      build360PublicWebUrl: process.env.BUILD360_PUBLIC_WEB_URL,
+      vercelUrl: process.env.VERCEL_URL,
+      vercelProjectProductionUrl: process.env.VERCEL_PROJECT_PRODUCTION_URL,
+    })
+  ) {
+    return null;
+  }
+
+  let response: Response;
   try {
-    const response = await fetch(
+    response = await fetch(
       backendUrl(`/companies/domain/resolve?host=${encodeURIComponent(host)}`),
       { cache: "no-store" },
     );
-    return response.ok ? ((await response.json()) as DomainBrand) : null;
-  } catch {
+  } catch (error: unknown) {
+    console.error("[Build360 domain resolver] request failed", {
+      host,
+      error: error instanceof Error ? error.message : "unknown error",
+    });
     return null;
   }
+
+  if (response.status === 404) return null;
+
+  if (!response.ok) {
+    console.error("[Build360 domain resolver] unexpected response", {
+      host,
+      status: response.status,
+    });
+    return null;
+  }
+
+  return (await response.json()) as DomainBrand;
 });

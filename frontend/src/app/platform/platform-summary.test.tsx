@@ -42,7 +42,32 @@ describe("PlatformSummary", () => {
     expect(screen.getByRole("heading", { name: "MPSqre Construction" })).toBeTruthy();
     expect(screen.getByText("Protected")).toBeTruthy();
     expect(screen.getByText("foundation v1")).toBeTruthy();
-    expect(screen.getByText("PHASE 45 INSURANCE, BONDS, GUARANTEES & RISK TRANSFER OPERATIONS ACTIVE")).toBeTruthy();
+    expect(screen.getByText("Available modules")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Workspace launcher" })).toBeTruthy();
   });
+  it("shows Company Admin user administration only with access.user.manage", () => {
+    render(
+      <PlatformSummary
+        approvals={[]}
+        company={{
+          public_id: "company-2",
+          code: "ADMIN",
+          display_name: "Admin Company",
+          locale: "en-IN",
+          timezone: "Asia/Kolkata",
+          currency: "INR",
+        }}
+        configurations={[]}
+        entitlements={null}
+        features={{}}
+        permissions={["access.user.manage"]}
+        platformOperator={false}
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: "Users & permissions" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Open user administration" })).toBeTruthy();
+  });
+
+
 });

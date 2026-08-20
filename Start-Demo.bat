@@ -4,7 +4,7 @@ set "ROOT=%~1"
 if not defined ROOT set "ROOT=%~dp0"
 for %%I in ("%ROOT%") do set "ROOT=%%~fI"
 if not exist "%ROOT%\backend\.env.demo" (echo [ERROR] backend\.env.demo missing. Run Configure-Local-Environments.ps1 first.& exit /b 1)
-set "PYTHON=%ROOT%\backend\.venv\Scripts\python.exe"
+set "PYTHON=%ROOT%\backend\venv\Scripts\python.exe"
 if not exist "%PYTHON%" (
   echo [ERROR] Build360 backend Python runtime is not installed.
   echo [NEXT] Run Setup-Backend-Runtime.bat "%ROOT%"

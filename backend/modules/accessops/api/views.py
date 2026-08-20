@@ -4,6 +4,8 @@ import uuid
 
 from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db.models import Q
+from django.utils import timezone
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
@@ -15,6 +17,12 @@ from modules.accessops.application.invitation_delivery import (
     deliver_invitation_email,
     invitation_acceptance_url,
     preview_invitation,
+)
+from modules.accessops.application.managed_access import (
+    managed_access_history,
+    managed_access_matrix,
+    managed_role_public_ids_for_levels,
+    set_membership_managed_access,
 )
 from modules.accessops.application.selectors import company_overview, platform_overview
 from modules.accessops.application.services import (
@@ -31,8 +39,9 @@ from modules.accessops.application.services import (
     set_company_feature_override,
     set_company_feature_preset,
     set_membership_status,
+    transfer_primary_company_admin,
 )
-from modules.accessops.models import AccessInvitation, PlatformOperator
+from modules.accessops.models import AccessInvitation, CompanyAccessProfile, PlatformOperator
 from modules.identity.application.tokens import AccessPrincipal
 from modules.subscription.application.feature_control import feature_matrix
 from modules.tenant.api.base import TenantScopedAPIView
@@ -45,9 +54,11 @@ from .serializers import (
     CompanyStatusSerializer,
     InvitationAcceptSerializer,
     InvitationCreateSerializer,
+    ManagedAccessProfileSerializer,
     MembershipRolesSerializer,
     MembershipStatusSerializer,
     PrimaryAdminInviteRegenerateSerializer,
+    PrimaryAdminTransferSerializer,
     RoleCreateSerializer,
     uuid_list,
 )
@@ -263,6 +274,75 @@ class PlatformPrimaryAdminInvitationView(PlatformAPIView):
         return Response(invitation_response(invitation, raw_token), status=201)
 
 
+class PlatformPrimaryAdminTransferView(PlatformAPIView):
+    def _company(self, company_id: uuid.UUID) -> Company:
+        company = Company.objects.filter(public_id=company_id).first()
+        if company is None:
+            raise NotFound("Resource not found")
+        return company
+
+    def get(self, request: Request, company_id: uuid.UUID) -> Response:
+        self.require_root_operator()
+        company = self._company(company_id)
+        now = timezone.now()
+        profile = CompanyAccessProfile.objects.filter(company=company).first()
+        current_email = profile.primary_admin_email.strip().lower() if profile else ""
+        memberships = (
+            Membership.objects.select_related("user")
+            .filter(
+                company=company,
+                effective_from__lte=now,
+                suspended_at__isnull=True,
+                terminated_at__isnull=True,
+                user__is_active=True,
+            )
+            .filter(Q(effective_to__isnull=True) | Q(effective_to__gt=now))
+            .order_by("user__display_name", "user__email")
+        )
+        return Response(
+            {
+                "company": {
+                    "public_id": str(company.public_id),
+                    "code": company.code,
+                    "display_name": company.display_name,
+                },
+                "current_primary_admin_email": current_email,
+                "candidates": [
+                    {
+                        "membership_public_id": str(item.public_id),
+                        "email": item.user.email,
+                        "display_name": item.user.display_name,
+                        "is_current_primary": item.user.email.strip().lower() == current_email,
+                    }
+                    for item in memberships
+                ],
+            }
+        )
+
+    def post(self, request: Request, company_id: uuid.UUID) -> Response:
+        self.require_root_operator()
+        company = self._company(company_id)
+        serializer = PrimaryAdminTransferSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        membership = Membership.objects.select_related("user", "company").filter(
+            company=company,
+            public_id=serializer.validated_data["membership_public_id"],
+        ).first()
+        if membership is None:
+            raise NotFound("Resource not found")
+        try:
+            result = transfer_primary_company_admin(
+                company=company,
+                membership=membership,
+                actor_public_id=self.operator.user.public_id,
+                correlation_id=correlation_id(request),
+                reason_code=serializer.validated_data["reason_code"],
+            )
+        except DjangoValidationError as error:
+            raise translate_validation_error(error) from error
+        return Response(result)
+
+
 class PlatformCompanyAdminInviteView(PlatformAPIView):
     def post(self, request: Request, company_id: uuid.UUID) -> Response:
         company = Company.objects.filter(public_id=company_id).first()
@@ -333,6 +413,62 @@ class CompanyPeopleView(CompanyAccessAPIView):
         return Response(company_overview(self.tenant_context.company))
 
 
+class CompanyManagedAccessMatrixView(CompanyAccessAPIView):
+    required_permission = "access.user.manage"
+
+    def get(self, request: Request) -> Response:
+        return Response(managed_access_matrix(self.tenant_context.company))
+
+
+class CompanyMembershipManagedAccessView(CompanyAccessAPIView):
+    required_permission = "access.user.manage"
+
+    def post(self, request: Request, membership_id: uuid.UUID) -> Response:
+        membership = Membership.objects.select_related("company", "user").filter(
+            public_id=membership_id,
+            company=self.tenant_context.company,
+        ).first()
+        if membership is None:
+            raise NotFound("Resource not found")
+        serializer = ManagedAccessProfileSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            levels = set_membership_managed_access(
+                membership=membership,
+                access_levels=serializer.validated_data["access_levels"],
+                actor_public_id=self.tenant_context.principal.user.public_id,
+                correlation_id=correlation_id(request),
+                reason_code=serializer.validated_data["reason_code"],
+            )
+        except DjangoValidationError as error:
+            raise translate_validation_error(error) from error
+        return Response(
+            {
+                "membership_public_id": str(membership.public_id),
+                "access_levels": levels,
+            }
+        )
+
+
+class CompanyMembershipManagedAccessHistoryView(CompanyAccessAPIView):
+    required_permission = "access.user.manage"
+
+    def get(self, request: Request, membership_id: uuid.UUID) -> Response:
+        membership = Membership.objects.select_related("company", "user").filter(
+            public_id=membership_id,
+            company=self.tenant_context.company,
+        ).first()
+        if membership is None:
+            raise NotFound("Resource not found")
+        return Response(
+            managed_access_history(
+                company=self.tenant_context.company,
+                membership=membership,
+                limit=50,
+            )
+        )
+
+
 class CompanyInvitationListCreateView(CompanyAccessAPIView):
     required_permission = "access.user.manage"
 
@@ -344,7 +480,18 @@ class CompanyInvitationListCreateView(CompanyAccessAPIView):
         serializer.is_valid(raise_exception=True)
         can_manage_roles = "access.role.manage" in self.tenant_context.permission_codes()
         supplied_role_ids = uuid_list(serializer.validated_data.get("role_public_ids", []))
-        if can_manage_roles and supplied_role_ids:
+        access_levels = serializer.validated_data.get("access_levels")
+        if access_levels is not None:
+            try:
+                role_public_ids, _ = managed_role_public_ids_for_levels(
+                    company=self.tenant_context.company,
+                    access_levels=access_levels,
+                    actor_public_id=self.tenant_context.principal.user.public_id,
+                    correlation_id=correlation_id(request),
+                )
+            except DjangoValidationError as error:
+                raise translate_validation_error(error) from error
+        elif can_manage_roles and supplied_role_ids:
             role_public_ids = supplied_role_ids
         else:
             default_role = current_company_user_role(self.tenant_context.company)

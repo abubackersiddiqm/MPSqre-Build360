@@ -109,4 +109,48 @@ describe("CrmWorkspace relationship-first UX", () => {
     expect(screen.getByRole("button", { name: /Save person \+ create lead/i })).not.toBeNull();
   });
 
+  it("renders CRM as view-only and removes write entry points for a read-only user", () => {
+    render(
+      <CrmWorkspace
+        {...baseProps}
+        permissions={[
+          "crm.dashboard.read",
+          "crm.contact.read",
+          "crm.customer.read",
+          "crm.lead.read",
+          "crm.opportunity.read",
+          "crm.activity.read",
+        ]}
+        features={{ "crm.core": true }}
+      />,
+    );
+    expect(screen.getByLabelText("CRM access level").textContent).toContain("View only");
+    expect(screen.getByText("View-only CRM access.")).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "New Lead" })).toBeNull();
+  });
+
+  it("labels normal write access as read plus edit", () => {
+    render(
+      <CrmWorkspace
+        {...baseProps}
+        permissions={["crm.dashboard.read", "crm.contact.read", "crm.lead.read", "crm.lead.manage"]}
+        features={{ "crm.core": true }}
+      />,
+    );
+    expect(screen.getByLabelText("CRM access level").textContent).toContain("Read + edit");
+    expect(screen.getByRole("button", { name: "New Lead" })).not.toBeNull();
+    expect(screen.queryByText("View-only CRM access.")).toBeNull();
+  });
+
+  it("labels sensitive CRM capability as full access", () => {
+    render(
+      <CrmWorkspace
+        {...baseProps}
+        permissions={["crm.dashboard.read", "crm.contact.read", "crm.lead.read", "crm.lead.manage", "crm.lead.convert"]}
+        features={{ "crm.core": true }}
+      />,
+    );
+    expect(screen.getByLabelText("CRM access level").textContent).toContain("Full access");
+  });
+
 });

@@ -83,9 +83,14 @@ async function loadNavigationAccess(mode: "internal" | "partner"): Promise<Navig
 function WorkspaceLink({ href, code, label, meta, pathname }: { href: Route; code: string; label: string; meta: string; pathname: string }) {
   const isActive = pathname === href || pathname.startsWith(`${href}/`);
   return (
-    <Link href={href} className={`${styles.link} ${isActive ? styles.active : ""}`} aria-current={isActive ? "page" : undefined}>
-      <span className={styles.icon} aria-hidden="true">{code}</span>
-      <span className={styles.copy}><strong>{label}</strong><small>{meta}</small></span>
+    <Link href={href} className={`${styles.link} ${isActive ? styles.active : ""}`} aria-current={isActive ? "page" : undefined} data-phase-link title={label}>
+      <span className={styles.icon} aria-hidden="true">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8">
+          <path d="M4 5h16v14H4Z" />
+          <path d="M8 9h8M8 13h5" />
+        </svg>
+      </span>
+      <span className={styles.copy} data-phase-copy><strong>{label}</strong><small>{meta}</small></span>
     </Link>
   );
 }

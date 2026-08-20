@@ -5,6 +5,7 @@ import {
   isProtectedWorkspacePath,
   visibleWorkspaces,
   WORKSPACES,
+  workspaceAccessLevel,
   workspaceForPath,
 } from "./workspaces";
 
@@ -131,6 +132,61 @@ describe("workspace registry", () => {
         platformOperator: true,
       }),
     ).toBe(true);
+  });
+
+  it("classifies managed workspace access consistently", () => {
+    const crm = WORKSPACES.find((workspace) => workspace.key === "crm");
+    const finance = WORKSPACES.find((workspace) => workspace.key === "finance");
+    expect(crm).toBeDefined();
+    expect(finance).toBeDefined();
+
+    expect(
+      workspaceAccessLevel(crm!, {
+        permissions: ["crm.dashboard.read", "crm.contact.read"],
+        features: { "crm.core": true },
+        platformOperator: false,
+      }),
+    ).toBe("VIEW");
+
+    expect(
+      workspaceAccessLevel(crm!, {
+        permissions: ["crm.dashboard.read", "crm.contact.read", "crm.contact.manage"],
+        features: { "crm.core": true },
+        platformOperator: false,
+      }),
+    ).toBe("EDIT");
+
+    expect(
+      workspaceAccessLevel(crm!, {
+        permissions: ["crm.dashboard.read", "crm.contact.read", "crm.lead.convert"],
+        features: { "crm.core": true },
+        platformOperator: false,
+      }),
+    ).toBe("FULL");
+
+    expect(
+      workspaceAccessLevel(crm!, {
+        permissions: ["finance.dashboard.read"],
+        features: { "crm.core": true, "module.finance": true },
+        platformOperator: false,
+      }),
+    ).toBe("NONE");
+
+    expect(
+      workspaceAccessLevel(crm!, {
+        permissions: ["crm.dashboard.read"],
+        features: { "crm.core": false },
+        platformOperator: false,
+      }),
+    ).toBe("NONE");
+
+    expect(
+      workspaceAccessLevel(finance!, {
+        permissions: ["finance.dashboard.read", "finance.invoice.manage"],
+        features: { "module.finance": true },
+        platformOperator: false,
+      }),
+    ).toBe("EDIT");
   });
 
   it("resolves nested routes and protects only operating workspaces", () => {

@@ -68,6 +68,7 @@ export function PlatformSummary({
   const canOpenWhiteLabel =
     features["tenant.white_label"] === true &&
     (permissions.includes("tenant.branding.read") || permissions.includes("tenant.domain.read"));
+  const canManageUsers = permissions.includes("access.user.manage");
 
   return (
     <main className="min-h-screen px-5 py-7 sm:px-8 lg:px-12">
@@ -84,8 +85,16 @@ export function PlatformSummary({
               {company.code} · {company.currency} · {company.timezone}
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2">
             <StatusPill>WORKSPACE ACTIVE</StatusPill>
+            {canManageUsers ? (
+              <Link
+                className="rounded-lg bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white"
+                href="/platform/access-control"
+              >
+                Users & permissions
+              </Link>
+            ) : null}
             <Link
               className="rounded-lg border border-[var(--border)] bg-white px-4 py-2 text-sm font-semibold"
               href="/workspaces"
@@ -100,20 +109,40 @@ export function PlatformSummary({
           </div>
         </header>
 
-        <section className="grid gap-4 py-7 sm:grid-cols-2 xl:grid-cols-4">
-          <article className="rounded-2xl border border-[var(--border)] bg-white p-5 shadow-sm">
+        {canManageUsers ? (
+          <section className="mb-5 grid gap-3 rounded-2xl border border-[var(--border)] bg-white p-4 shadow-sm sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--brand)]">
+                Company administration
+              </p>
+              <h2 className="mt-1 text-lg font-semibold">Users, permissions & audit history</h2>
+              <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
+                Invite company users, apply module-level access and review every managed permission change.
+              </p>
+            </div>
+            <Link
+              className="rounded-lg border border-[var(--border)] bg-[var(--brand-soft)] px-4 py-2.5 text-center text-sm font-semibold text-[var(--brand)]"
+              href="/platform/access-control"
+            >
+              Open user administration
+            </Link>
+          </section>
+        ) : null}
+
+        <section className="grid gap-3 py-5 sm:grid-cols-2 xl:grid-cols-4">
+          <article className="rounded-xl border border-[var(--border)] bg-white p-4 shadow-sm">
             <p className="text-sm text-[var(--muted)]">Access permissions</p>
             <p className="mt-2 text-3xl font-semibold">{permissions.length}</p>
           </article>
-          <article className="rounded-2xl border border-[var(--border)] bg-white p-5 shadow-sm">
+          <article className="rounded-xl border border-[var(--border)] bg-white p-4 shadow-sm">
             <p className="text-sm text-[var(--muted)]">Active settings</p>
             <p className="mt-2 text-3xl font-semibold">{configurations.length}</p>
           </article>
-          <article className="rounded-2xl border border-[var(--border)] bg-white p-5 shadow-sm">
+          <article className="rounded-xl border border-[var(--border)] bg-white p-4 shadow-sm">
             <p className="text-sm text-[var(--muted)]">Pending approvals</p>
             <p className="mt-2 text-3xl font-semibold">{approvals.length}</p>
           </article>
-          <article className="rounded-2xl border border-[var(--border)] bg-white p-5 shadow-sm">
+          <article className="rounded-xl border border-[var(--border)] bg-white p-4 shadow-sm">
             <p className="text-sm text-[var(--muted)]">Available modules</p>
             <p className="mt-2 text-3xl font-semibold">{enabledEntitlements}</p>
           </article>
@@ -191,7 +220,7 @@ export function PlatformSummary({
                   <li className="rounded-xl border border-[var(--border)] p-4" key={approval.public_id}>
                     <p className="font-medium">{approval.transition_code}</p>
                     <p className="mt-1 text-sm text-[var(--muted)]">
-                      {approval.from_state_code} ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ {approval.to_state_code}
+                      {approval.from_state_code} → {approval.to_state_code}
                     </p>
                   </li>
                 ))}

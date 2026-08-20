@@ -4,6 +4,9 @@ from .views import (
     CompanyInvitationListCreateView,
     CompanyInvitationRegenerateView,
     CompanyInvitationRevokeView,
+    CompanyManagedAccessMatrixView,
+    CompanyMembershipManagedAccessHistoryView,
+    CompanyMembershipManagedAccessView,
     CompanyMembershipRolesView,
     CompanyMembershipStatusView,
     CompanyOverviewView,
@@ -17,6 +20,7 @@ from .views import (
     PlatformCompanyStatusView,
     PlatformOverviewView,
     PlatformPrimaryAdminInvitationView,
+    PlatformPrimaryAdminTransferView,
     PlatformSessionView,
 )
 
@@ -44,8 +48,28 @@ urlpatterns = [
         PlatformPrimaryAdminInvitationView.as_view(),
         name="access-platform-primary-admin-invitation",
     ),
+    path(
+        "platform/companies/<uuid:company_id>/primary-admin",
+        PlatformPrimaryAdminTransferView.as_view(),
+        name="access-platform-primary-admin-transfer",
+    ),
     path("company/overview", CompanyOverviewView.as_view(), name="access-company-overview"),
     path("company/people", CompanyPeopleView.as_view(), name="access-company-people"),
+    path(
+        "company/access-matrix",
+        CompanyManagedAccessMatrixView.as_view(),
+        name="access-company-managed-access-matrix",
+    ),
+    path(
+        "company/people/<uuid:membership_id>/access-profile",
+        CompanyMembershipManagedAccessView.as_view(),
+        name="access-company-membership-access-profile",
+    ),
+    path(
+        "company/people/<uuid:membership_id>/access-history",
+        CompanyMembershipManagedAccessHistoryView.as_view(),
+        name="access-company-membership-access-history",
+    ),
     path("company/roles", CompanyRoleListCreateView.as_view(), name="access-company-roles"),
     path(
         "company/invitations",

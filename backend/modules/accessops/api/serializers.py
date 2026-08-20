@@ -44,6 +44,10 @@ class InvitationCreateSerializer(serializers.Serializer):
     role_public_ids = serializers.ListField(
         child=serializers.UUIDField(), allow_empty=True, max_length=20, required=False, default=list
     )
+    access_levels = serializers.DictField(
+        child=serializers.ChoiceField(choices=("NONE", "VIEW", "EDIT", "FULL")),
+        required=False,
+    )
     employee_number = serializers.CharField(max_length=50, required=False, allow_blank=True)
     job_title = serializers.CharField(max_length=150, required=False, allow_blank=True)
     ttl_hours = serializers.IntegerField(min_value=1, max_value=168, default=72)
@@ -86,3 +90,21 @@ def uuid_list(values: list[uuid.UUID]) -> list[uuid.UUID]:
 
 class PrimaryAdminInviteRegenerateSerializer(serializers.Serializer):
     ttl_hours = serializers.IntegerField(min_value=1, max_value=168, default=72)
+
+
+class PrimaryAdminTransferSerializer(serializers.Serializer):
+    membership_public_id = serializers.UUIDField()
+    reason_code = serializers.CharField(min_length=3, max_length=100)
+
+
+class ManagedAccessProfileSerializer(serializers.Serializer):
+    access_levels = serializers.DictField(
+        child=serializers.ChoiceField(choices=("NONE", "VIEW", "EDIT", "FULL")),
+        allow_empty=True,
+    )
+    reason_code = serializers.CharField(
+        min_length=3,
+        max_length=100,
+        required=False,
+        default="company-admin-permission-change",
+    )

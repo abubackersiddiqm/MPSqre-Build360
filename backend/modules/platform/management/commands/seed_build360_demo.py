@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import os
 import uuid
 from datetime import timedelta
@@ -39,6 +40,7 @@ from modules.crm.models import (
     StageHistory,
 )
 from modules.identity.models import Permission, Role, User
+from modules.integration.models import ConnectorProfile, MetaLeadReceipt
 from modules.projects.models import DeliveryStage, Project, ProjectTask, WbsNode
 from modules.subscription.application.feature_control import (
     FEATURE_CATALOG,
@@ -263,6 +265,13 @@ class Command(BaseCommand):
                 user=demo_user,
                 now=now,
             )
+            if company.code in {"DEMOCRM", "DEMO360"}:
+                self._seed_meta_submissions(
+                    company=company,
+                    membership=user_membership,
+                    user=demo_user,
+                    now=now,
+                )
             if bool(spec["seed_projects"]):
                 self._seed_projects(
                     company=company,
@@ -301,6 +310,7 @@ class Command(BaseCommand):
         self.stdout.write("AI provider : LOCAL_GROUNDED / local_grounded")
         self.stdout.write("AI model    : build360-local-grounded-crm-v2")
         self.stdout.write("AI enabled  : DEMOCRM and DEMO360")
+        self.stdout.write("Meta demo   : 4 synthetic submissions each in DEMOCRM and DEMO360")
         self.stdout.write(
             self.style.WARNING(
                 "Demo credentials and data are fake and must never be copied into production."
@@ -440,6 +450,8 @@ class Command(BaseCommand):
         actor_public_id: uuid.UUID,
     ) -> None:
         desired = _preset_values(preset_code)
+        normalized_preset = preset_code.strip().upper()
+        desired["crm.meta_ads"] = normalized_preset in {"CRM_ONLY", "FULL_BUILD360"}
         desired["crm.ai_summary"] = crm_ai
         desired["crm.ai_recommendation"] = crm_ai
 
@@ -447,8 +459,7 @@ class Command(BaseCommand):
             str(item["code"]): bool(item["enabled"])
             for item in feature_matrix(company=company)["items"]
         }
-        preset_desired = _preset_values(preset_code)
-        if any(current.get(code, False) != enabled for code, enabled in preset_desired.items()):
+        if any(current.get(code, False) != enabled for code, enabled in desired.items()):
             set_company_feature_preset(
                 company=company,
                 preset_code=preset_code,
@@ -461,17 +472,22 @@ class Command(BaseCommand):
                 for item in feature_matrix(company=company)["items"]
             }
 
-        for feature_code in ("crm.ai_summary", "crm.ai_recommendation"):
+        for feature_code, reason_code in (
+            ("crm.meta_ads", "demo-meta-ads"),
+            ("crm.ai_summary", "demo-crm-ai"),
+            ("crm.ai_recommendation", "demo-crm-ai"),
+        ):
             enabled = bool(desired[feature_code])
             if current.get(feature_code, False) != enabled:
                 set_company_feature_override(
                     company=company,
                     feature_code=feature_code,
                     enabled=enabled,
-                    reason_code="demo-crm-ai",
+                    reason_code=reason_code,
                     actor_public_id=actor_public_id,
                     correlation_id=uuid.uuid4(),
                 )
+                current[feature_code] = enabled
 
     def _ensure_membership(self, *, company: Company, user: User, now) -> Membership:
         membership, _ = Membership.objects.update_or_create(
@@ -675,7 +691,7 @@ class Command(BaseCommand):
             ("GREEN", "GreenNest villa community phase 2", "contacted", "referral", Decimal("46000000"), now + timedelta(hours=2), "Residential", "Coimbatore", 52000, "Design"),
             ("METRO", "Metro flagship retail interior", "new", "event", Decimal("12500000"), now + timedelta(days=1), "Commercial", "Bengaluru", 18000, "Planning"),
             ("ARCADIA", "Arcadia plant expansion civil package", "qualified", "phone", Decimal("72000000"), now + timedelta(days=3), "Industrial", "Hosur", 110000, "Approval"),
-            ("RIVER", "Riverstone apartment clubhouse", "contacted", "meta_ads", Decimal("18000000"), None, "Residential", "Chennai", 24000, "Planning"),
+            ("RIVER", "Riverstone apartment clubhouse", "contacted", "referral", Decimal("18000000"), None, "Residential", "Chennai", 24000, "Planning"),
             ("PRIYA", "Priya residence turnkey construction", "new", "whatsapp", Decimal("9500000"), now - timedelta(hours=4), "Residential", "Chennai", 3400, "Ready to start"),
             ("ZENITH2", "Zenith procurement advisory requirement", "new", "email", Decimal("2500000"), now + timedelta(days=5), "Commercial", "Chennai", 0, "Ongoing"),
             ("GREEN2", "GreenNest landscape and amenities", "contacted", "partner", Decimal("6500000"), now + timedelta(hours=26), "Residential", "Coimbatore", 15000, "Design"),
@@ -805,6 +821,300 @@ class Command(BaseCommand):
                 owner_membership_public_id=membership.public_id,
                 created_by_public_id=user.public_id,
             )
+
+    def _seed_meta_submissions(
+        self,
+        *,
+        company: Company,
+        membership: Membership,
+        user: User,
+        now,
+    ) -> None:
+        """Seed synthetic Meta ingestion evidence without calling Meta or creating CRM Leads."""
+
+        connector, _ = ConnectorProfile.objects.update_or_create(
+            company=company,
+            code="DEMO_META_LEADS",
+            defaults={
+                "name": "Demo Meta Lead Ads (synthetic evidence)",
+                "connector_type": ConnectorProfile.ConnectorType.CUSTOM,
+                "provider_code": "META_LEAD_ADS",
+                "direction": ConnectorProfile.Direction.INBOUND,
+                "status": ConnectorProfile.Status.SUSPENDED,
+                "base_url": "https://graph.facebook.com",
+                "public_config": {
+                    "page_id": f"DEMO-PAGE-{company.code}",
+                    "page_name": "Build360 Demo Meta Page",
+                    "lead_form_ids": [
+                        f"DEMO-FB-FORM-{company.code}",
+                        f"DEMO-IG-FORM-{company.code}",
+                    ],
+                    "graph_api_version": "v26.0",
+                    "default_owner_membership_public_id": str(membership.public_id),
+                    "mapping_code": "META_LEAD_DEFAULT",
+                    "webhook_verify_token_digest": hashlib.sha256(
+                        f"build360-demo-meta:{company.code}".encode("utf-8")
+                    ).hexdigest(),
+                    "webhook_verify_token_last_four": "DEMO",
+                    "demo_only": True,
+                },
+                "secret_ref": "",
+                "allowed_data_classes": ["crm_contact", "integration_metadata"],
+                "health_status": ConnectorProfile.HealthStatus.UNKNOWN,
+                "last_health_checked_at": None,
+                "last_health_message": (
+                    "Synthetic demo connector; no external Meta network call is performed."
+                ),
+            },
+        )
+
+        submissions = (
+            {
+                "external_id": f"DEMO-FB-{company.code}-0001",
+                "platform": "facebook",
+                "source_code": "FACEBOOK",
+                "source_label": "Facebook",
+                "first_name": "Arjun",
+                "last_name": "Kumar",
+                "job_title": "Home Owner",
+                "email": "arjun.meta.demo@example.com",
+                "phone": "+919000001501",
+                "form_id": f"DEMO-FB-FORM-{company.code}",
+                "campaign_id": f"DEMO-FB-CAMPAIGN-{company.code}-VILLA",
+                "campaign_name": "Chennai Villa Construction",
+                "adset_id": f"DEMO-FB-ADSET-{company.code}-HOMEOWNERS",
+                "adset_name": "Chennai Home Owners",
+                "ad_id": f"DEMO-FB-AD-{company.code}-ESTIMATE",
+                "ad_name": "Free Villa Construction Estimate",
+                "submitted_answers": {
+                    "project_type": "Individual Villa",
+                    "site_location": "OMR, Chennai",
+                    "budget_range": "INR 75L - 1Cr",
+                    "requirement": "Need turnkey construction estimate",
+                },
+                "minutes_ago": 18,
+            },
+            {
+                "external_id": f"DEMO-IG-{company.code}-0001",
+                "platform": "instagram",
+                "source_code": "INSTAGRAM",
+                "source_label": "Instagram",
+                "first_name": "Nivetha",
+                "last_name": "R",
+                "job_title": "Home Owner",
+                "email": "nivetha.meta.demo@example.com",
+                "phone": "+919000001502",
+                "form_id": f"DEMO-IG-FORM-{company.code}",
+                "campaign_id": f"DEMO-IG-CAMPAIGN-{company.code}-INTERIOR",
+                "campaign_name": "Luxury Interior Chennai",
+                "adset_id": f"DEMO-IG-ADSET-{company.code}-INTERIORS",
+                "adset_name": "Premium Interior Audience",
+                "ad_id": f"DEMO-IG-AD-{company.code}-CONSULT",
+                "ad_name": "Free Interior Consultation",
+                "submitted_answers": {
+                    "project_type": "Apartment Interior",
+                    "site_location": "Anna Nagar, Chennai",
+                    "budget_range": "INR 18L - 25L",
+                    "requirement": "3BHK complete interior design and execution",
+                },
+                "minutes_ago": 34,
+            },
+            {
+                "external_id": f"DEMO-FB-{company.code}-0002",
+                "platform": "facebook",
+                "source_code": "FACEBOOK",
+                "source_label": "Facebook",
+                "first_name": "Meera",
+                "last_name": "S",
+                "job_title": "Property Owner",
+                "email": "meera.meta.demo@example.com",
+                "phone": "+919000001503",
+                "form_id": f"DEMO-FB-FORM-{company.code}",
+                "campaign_id": f"DEMO-FB-CAMPAIGN-{company.code}-RENOVATION",
+                "campaign_name": "Home Renovation Leads",
+                "adset_id": f"DEMO-FB-ADSET-{company.code}-RENOVATION",
+                "adset_name": "Chennai Renovation Audience",
+                "ad_id": f"DEMO-FB-AD-{company.code}-RENOVATION",
+                "ad_name": "Renovation Site Visit",
+                "submitted_answers": {
+                    "project_type": "House Renovation",
+                    "site_location": "Porur, Chennai",
+                    "budget_range": "INR 30L - 40L",
+                    "requirement": "Structural renovation plus interiors",
+                },
+                "minutes_ago": 52,
+            },
+            {
+                "external_id": f"DEMO-IG-{company.code}-0002",
+                "platform": "instagram",
+                "source_code": "INSTAGRAM",
+                "source_label": "Instagram",
+                "first_name": "Praveen",
+                "last_name": "M",
+                "job_title": "Business Owner",
+                "email": "praveen.meta.demo@example.com",
+                "phone": "+919000001504",
+                "form_id": f"DEMO-IG-FORM-{company.code}",
+                "campaign_id": f"DEMO-IG-CAMPAIGN-{company.code}-OFFICE",
+                "campaign_name": "Commercial Interior Enquiries",
+                "adset_id": f"DEMO-IG-ADSET-{company.code}-BUSINESS",
+                "adset_name": "Chennai Business Owners",
+                "ad_id": f"DEMO-IG-AD-{company.code}-OFFICE",
+                "ad_name": "Office Interior Consultation",
+                "submitted_answers": {
+                    "project_type": "Office Interior",
+                    "site_location": "Guindy, Chennai",
+                    "budget_range": "INR 45L - 60L",
+                    "requirement": "6000 sqft office design and fit-out",
+                },
+                "minutes_ago": 71,
+            },
+        )
+
+        for index, submission in enumerate(submissions):
+            normalized_email = normalize_email(str(submission["email"]))
+            normalized_phone = normalize_phone(str(submission["phone"]))
+            phone_index = blind_index(normalized_phone, purpose="phone")
+            contact = Contact.objects.filter(
+                company=company,
+                phone_blind_index=phone_index,
+            ).first()
+            contact_values = {
+                "customer": None,
+                "first_name": str(submission["first_name"]),
+                "last_name": str(submission["last_name"]),
+                "job_title": str(submission["job_title"]),
+                "email_ciphertext": encrypt_value(normalized_email),
+                "email_blind_index": blind_index(normalized_email, purpose="email"),
+                "phone_ciphertext": encrypt_value(normalized_phone),
+                "phone_blind_index": phone_index,
+                "alternate_phone_ciphertext": encrypt_value(""),
+                "alternate_phone_blind_index": blind_index("", purpose="phone"),
+                "email_last_four": normalized_email[-4:],
+                "phone_last_four": normalized_phone[-4:],
+                "alternate_phone_last_four": "",
+                "consent_status": Contact.ConsentStatus.GRANTED,
+                "preferred_channel_code": "phone",
+                "source_code": str(submission["source_code"]),
+                "tags": [
+                    "demo",
+                    "meta-ads",
+                    f"meta-source:{str(submission['source_code']).lower()}",
+                ],
+                "notes": (
+                    "Synthetic Meta Lead Ads person created for the Build360 demo database."
+                ),
+                "owner_membership_public_id": membership.public_id,
+                "is_active": True,
+            }
+            if contact is None:
+                contact = Contact.objects.create(company=company, **contact_values)
+            else:
+                for field, value in contact_values.items():
+                    setattr(contact, field, value)
+                contact.save()
+
+            source_created_at = now - timedelta(minutes=int(submission["minutes_ago"]))
+            metadata = {
+                "provider": "meta_lead_ads",
+                "lead_id": str(submission["external_id"]),
+                "page_id": f"DEMO-PAGE-{company.code}",
+                "form_id": str(submission["form_id"]),
+                "campaign_id": str(submission["campaign_id"]),
+                "campaign_name": str(submission["campaign_name"]),
+                "adset_id": str(submission["adset_id"]),
+                "adset_name": str(submission["adset_name"]),
+                "ad_id": str(submission["ad_id"]),
+                "ad_name": str(submission["ad_name"]),
+                "platform": str(submission["platform"]),
+                "source_code": str(submission["source_code"]),
+                "source_label": str(submission["source_label"]),
+                "submitted_answers": dict(submission["submitted_answers"]),
+            }
+            display_name = " ".join(
+                value for value in [contact.first_name, contact.last_name] if value
+            ).strip()
+            subject = f"Call {display_name} · New {submission['source_label']} enquiry"
+            scheduled_for = now + timedelta(minutes=5 + (index * 5))
+            activity = Activity.objects.filter(
+                company=company,
+                contact=contact,
+                subject=subject,
+            ).first()
+            activity_values = {
+                "customer": None,
+                "lead": None,
+                "opportunity": None,
+                "activity_type": Activity.ActivityType.CALL,
+                "status": Activity.Status.PLANNED,
+                "direction": Activity.Direction.OUTBOUND,
+                "outcome_code": "",
+                "duration_seconds": None,
+                "channel_metadata": metadata,
+                "notes": (
+                    f"New person/enquiry received from {submission['source_label']} Lead Ads. "
+                    "Review the submitted ad details before calling."
+                ),
+                "scheduled_for": scheduled_for,
+                "follow_up_at": scheduled_for,
+                "occurred_at": None,
+                "completed_at": None,
+                "priority": Activity.Priority.HIGH,
+                "owner_membership_public_id": membership.public_id,
+                "created_by_public_id": user.public_id,
+            }
+            if activity is None:
+                Activity.objects.create(
+                    company=company,
+                    contact=contact,
+                    subject=subject,
+                    **activity_values,
+                )
+            else:
+                for field, value in activity_values.items():
+                    setattr(activity, field, value)
+                activity.save()
+
+            digest_material = "|".join(
+                [
+                    company.code,
+                    str(submission["external_id"]),
+                    str(submission["form_id"]),
+                    str(submission["campaign_id"]),
+                    str(submission["ad_id"]),
+                ]
+            )
+            receipt, _ = MetaLeadReceipt.objects.update_or_create(
+                connector=connector,
+                external_lead_id=str(submission["external_id"]),
+                defaults={
+                    "company": company,
+                    "page_id": f"DEMO-PAGE-{company.code}",
+                    "form_id": str(submission["form_id"]),
+                    "campaign_id": str(submission["campaign_id"]),
+                    "adset_id": str(submission["adset_id"]),
+                    "ad_id": str(submission["ad_id"]),
+                    "source_created_at": source_created_at,
+                    "field_names": [
+                        "full_name",
+                        "email",
+                        "phone_number",
+                        *list(dict(submission["submitted_answers"]).keys()),
+                    ],
+                    "payload_digest_sha256": hashlib.sha256(
+                        digest_material.encode("utf-8")
+                    ).hexdigest(),
+                    "status": MetaLeadReceipt.Status.PROCESSED,
+                    "contact_public_id": contact.public_id,
+                    "lead_public_id": None,
+                    "attempt_count": 1,
+                    "last_attempt_at": source_created_at + timedelta(minutes=1),
+                    "processed_at": source_created_at + timedelta(minutes=2),
+                    "error_summary": "",
+                },
+            )
+            receipt.full_clean()
+            receipt.save()
 
     def _seed_projects(self, *, company: Company, membership: Membership, user: User, now) -> None:
         project_stage_defs = [

@@ -60,6 +60,26 @@ type CreateResult = {
 
 type AdminInviteResult = { public_id: string; email: string; expires_at: string; acceptance_token?: string; acceptance_url?: string; delivery: { status: string; brand_name: string; error_code: string } };
 
+type AdminCandidate = {
+  membership_public_id: string;
+  email: string;
+  display_name: string;
+  is_current_primary: boolean;
+};
+
+type AdminTransferCandidates = {
+  company: { public_id: string; code: string; display_name: string };
+  current_primary_admin_email: string;
+  candidates: AdminCandidate[];
+};
+
+type AdminTransferResult = {
+  changed: boolean;
+  previous_primary_admin_email: string;
+  primary_admin_email: string;
+  membership_public_id: string;
+};
+
 type FeatureItem = {
   code: string;
   label: string;
@@ -119,6 +139,11 @@ export function SuperAdminClient() {
   const [presetCode, setPresetCode] = useState("CRM_ONLY");
   const [reasonCode, setReasonCode] = useState("subscription-change");
   const [activeFeatureSection, setActiveFeatureSection] = useState("crm");
+  const [adminTransferCompany, setAdminTransferCompany] = useState<Company | null>(null);
+  const [adminCandidates, setAdminCandidates] = useState<AdminCandidate[]>([]);
+  const [adminTransferMembershipId, setAdminTransferMembershipId] = useState("");
+  const [adminTransferReason, setAdminTransferReason] = useState("primary-admin-change");
+  const [adminTransferLoading, setAdminTransferLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -337,6 +362,60 @@ export function SuperAdminClient() {
     }
   }
 
+  async function openAdminTransfer(company: Company) {
+    setAdminTransferCompany(company);
+    setAdminCandidates([]);
+    setAdminTransferMembershipId("");
+    setAdminTransferLoading(true);
+    setError("");
+    try {
+      const payload = await jsonRequest<AdminTransferCandidates>(`platform/companies/${company.public_id}/primary-admin`);
+      setAdminCandidates(payload.candidates);
+      const preferred = payload.candidates.find((item) => !item.is_current_primary) ?? payload.candidates[0] ?? null;
+      setAdminTransferMembershipId(preferred?.membership_public_id ?? "");
+    } catch (caught) {
+      setAdminTransferCompany(null);
+      setError(caught instanceof Error ? caught.message : "Administrator candidates could not be loaded.");
+    } finally {
+      setAdminTransferLoading(false);
+    }
+  }
+
+  async function transferPrimaryAdmin() {
+    if (!adminTransferCompany || !adminTransferMembershipId || !adminTransferReason.trim()) {
+      setError("Choose an active company user and enter a reason before changing the administrator.");
+      return;
+    }
+    const candidate = adminCandidates.find((item) => item.membership_public_id === adminTransferMembershipId);
+    if (!candidate) {
+      setError("Choose a valid active company user.");
+      return;
+    }
+    if (!window.confirm(`Make ${candidate.display_name || candidate.email} the primary Company Administrator for ${adminTransferCompany.display_name}?`)) return;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await jsonRequest<AdminTransferResult>(`platform/companies/${adminTransferCompany.public_id}/primary-admin`, {
+        method: "POST",
+        body: JSON.stringify({
+          membership_public_id: adminTransferMembershipId,
+          reason_code: adminTransferReason.trim(),
+        }),
+      });
+      setNotice(result.changed
+        ? `Primary Company Administrator changed to ${result.primary_admin_email}. The previous primary keeps normal company-user access.`
+        : `${result.primary_admin_email} is already the primary Company Administrator.`);
+      setAdminTransferCompany(null);
+      setAdminCandidates([]);
+      setAdminTransferMembershipId("");
+      await load();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Primary administrator could not be changed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function setStatus(company: Company) {
     setBusy(true);
     setError("");
@@ -450,9 +529,23 @@ export function SuperAdminClient() {
 
   return <main className={styles.page}>
     <section className={styles.hero}>
-      <div><p className={styles.kicker}>MPSqre Build360 · v1.0.0</p><h1>Company & package administration</h1><p>Create customer companies, assign the package they purchased, invite the first Company Administrator and manage account activation.</p></div>
-      <div className={styles.heroActions}><span className={styles.badge}>Platform administration</span><button className={`${styles.button} ${styles.buttonSecondary}`} onClick={() => void signOutPlatform()} type="button">Sign out</button></div>
+      <div>
+        <p className={styles.kicker}>MPSqre Build360 · Control center</p>
+        <h1>Company & package administration</h1>
+        <p>Create customer companies, govern purchased modules, manage the primary Company Administrator and keep tenant access production-safe.</p>
+      </div>
+      <div className={styles.heroActions}>
+        <span className={styles.badge}>ROOT_OPERATOR</span>
+        <button className={`${styles.button} ${styles.buttonSecondary}`} onClick={() => void signOutPlatform()} type="button">Sign out</button>
+      </div>
     </section>
+
+    <nav aria-label="Super Admin sections" className={styles.adminNav}>
+      <a href="#tenant-portfolio">Companies</a>
+      <a href="#tenant-package-control">Packages</a>
+      <a href="#new-company">New company</a>
+      <span>Platform-only controls · customer users never see this surface</span>
+    </nav>
 
     <section className={styles.metrics}>
       <article className={styles.metric}><span>Companies</span><strong>{overview.summary.company_count}</strong></article>
@@ -473,10 +566,10 @@ export function SuperAdminClient() {
     <section className={styles.controlDeck}>
       <section className={`${styles.panel} ${styles.portfolioPanel}`} id="tenant-portfolio">
         <div className={styles.sectionHeading}>
-          <div><p className={styles.kicker}>Customer portfolio</p><h2>Companies</h2><p className={styles.panelIntro}>Select a company and manage its package in the adjacent control panel.</p></div>
+          <div><p className={styles.kicker}>Customer portfolio</p><h2>Companies</h2><p className={styles.panelIntro}>Select a company, manage its purchased package, lifecycle and primary administrator from one control surface.</p></div>
           <span className={styles.sectionCount}>{overview.companies.length} tenants</span>
         </div>
-        <div className={styles.tableWrap}><table className={`${styles.table} ${styles.portfolioTable}`}><thead><tr><th>Company</th><th>Plan</th><th>People</th><th>Status</th><th>Primary admin</th><th>Actions</th></tr></thead><tbody>{overview.companies.map((company) => <tr className={selectedCompanyId === company.public_id ? styles.selectedRow : ""} key={company.public_id}><td><strong>{company.display_name}</strong><div className={styles.subtle}>{company.code} · {company.currency}</div><div className={styles.subtle}>{company.onboarding_status_code}</div></td><td>{company.plan_code || "Not assigned"}</td><td>{company.membership_count}</td><td><span className={`${styles.pill} ${company.is_active ? styles.pillActive : styles.pillDanger}`}>{company.is_active ? "ACTIVE" : "SUSPENDED"}</span></td><td>{company.primary_admin ? <div><strong>{company.primary_admin.display_name || company.primary_admin.email}</strong><div className={styles.subtle}>{company.primary_admin.email}</div><span className={`${styles.pill} ${company.primary_admin.status === "ACTIVE" ? styles.pillActive : styles.pillDanger}`}>{company.primary_admin.status.replaceAll("_", " ")}</span>{company.primary_admin.status === "ACTIVE" ? null : <button className={`${styles.linkButton}`} disabled={busy} onClick={() => void regeneratePrimaryAdminInvite(company)} type="button">Resend activation email</button>}</div> : <span className={styles.subtle}>Not configured</span>}</td><td><div className={styles.rowActions}><button className={`${styles.button} ${selectedCompanyId === company.public_id ? styles.buttonCurrent : styles.buttonSecondary}`} onClick={() => openPackage(company.public_id)} type="button">{selectedCompanyId === company.public_id ? "Package open" : "Open package"}</button><button className={`${styles.button} ${company.is_active ? styles.buttonDanger : styles.buttonSecondary}`} disabled={busy} onClick={() => void setStatus(company)} type="button">{company.is_active ? "Suspend" : "Activate"}</button></div></td></tr>)}</tbody></table></div>
+        <div className={styles.tableWrap}><table className={`${styles.table} ${styles.portfolioTable}`}><thead><tr><th>Company</th><th>Plan</th><th>People</th><th>Status</th><th>Primary admin</th><th>Actions</th></tr></thead><tbody>{overview.companies.map((company) => <tr className={selectedCompanyId === company.public_id ? styles.selectedRow : ""} key={company.public_id}><td><strong>{company.display_name}</strong><div className={styles.subtle}>{company.code} · {company.currency}</div><div className={styles.subtle}>{company.onboarding_status_code}</div></td><td>{company.plan_code || "Not assigned"}</td><td>{company.membership_count}</td><td><span className={`${styles.pill} ${company.is_active ? styles.pillActive : styles.pillDanger}`}>{company.is_active ? "ACTIVE" : "SUSPENDED"}</span></td><td>{company.primary_admin ? <div><strong>{company.primary_admin.display_name || company.primary_admin.email}</strong><div className={styles.subtle}>{company.primary_admin.email}</div><span className={`${styles.pill} ${company.primary_admin.status === "ACTIVE" ? styles.pillActive : styles.pillDanger}`}>{company.primary_admin.status.replaceAll("_", " ")}</span>{company.primary_admin.status === "ACTIVE" ? null : <button className={`${styles.linkButton}`} disabled={busy} onClick={() => void regeneratePrimaryAdminInvite(company)} type="button">Resend activation email</button>}</div> : <span className={styles.subtle}>Not configured</span>}</td><td><div className={styles.rowActions}><button className={`${styles.button} ${selectedCompanyId === company.public_id ? styles.buttonCurrent : styles.buttonSecondary}`} onClick={() => openPackage(company.public_id)} type="button">{selectedCompanyId === company.public_id ? "Package open" : "Open package"}</button><button className={`${styles.button} ${company.is_active ? styles.buttonDanger : styles.buttonSecondary}`} disabled={busy} onClick={() => void setStatus(company)} type="button">{company.is_active ? "Suspend" : "Activate"}</button><button className={`${styles.button} ${styles.buttonSecondary}`} disabled={busy} onClick={() => void openAdminTransfer(company)} type="button">Change admin</button></div></td></tr>)}</tbody></table></div>
       </section>
 
       <section className={`${styles.panel} ${styles.featurePanel}`} id="tenant-package-control">
@@ -484,7 +577,7 @@ export function SuperAdminClient() {
           <div>
             <p className={styles.kicker}>Subscription control</p>
             <h2>Package control</h2>
-            <p className={styles.panelIntro}>Core modules and add-ons are organized by product hierarchy instead of raw entitlement groups.</p>
+            <p className={styles.panelIntro}>Only purchased modules and add-ons should be enabled. Every change remains governed by a reason code.</p>
           </div>
           <div className={styles.featureControls}>
             <label>Company<select value={selectedCompanyId} onChange={(event) => setSelectedCompanyId(event.target.value)}>{overview.companies.map((company) => <option key={company.public_id} value={company.public_id}>{company.display_name} · {company.code}</option>)}</select></label>
@@ -554,5 +647,37 @@ export function SuperAdminClient() {
         </div><div className={styles.actions}><button className={styles.button} disabled={busy} type="submit">{busy ? "Creating…" : "Create company & send invite"}</button></div></form>
       </div>
     </details>
+    {adminTransferCompany ? (
+      <div className={styles.modalBackdrop} role="presentation">
+        <section aria-labelledby="primary-admin-transfer-title" aria-modal="true" className={styles.modalCard} role="dialog">
+          <div className={styles.modalHeader}>
+            <div>
+              <p className={styles.kicker}>Administrator control</p>
+              <h2 id="primary-admin-transfer-title">Change primary Company Administrator</h2>
+              <p className={styles.panelIntro}>{adminTransferCompany.display_name} · choose an existing active company user.</p>
+            </div>
+            <button className={`${styles.button} ${styles.buttonSecondary}`} onClick={() => setAdminTransferCompany(null)} type="button">Close</button>
+          </div>
+          {adminTransferLoading ? <div className={styles.empty}>Loading active company users…</div> : (
+            <div className={styles.modalBody}>
+              <label className={styles.field}>New primary administrator
+                <select value={adminTransferMembershipId} onChange={(event) => setAdminTransferMembershipId(event.target.value)}>
+                  <option value="">Choose active user</option>
+                  {adminCandidates.map((candidate) => <option key={candidate.membership_public_id} value={candidate.membership_public_id}>{candidate.display_name || candidate.email} · {candidate.email}{candidate.is_current_primary ? " · current" : ""}</option>)}
+                </select>
+              </label>
+              <label className={styles.field}>Reason code
+                <input maxLength={100} onChange={(event) => setAdminTransferReason(event.target.value)} value={adminTransferReason} />
+              </label>
+              <div className={styles.transferNote}>The new administrator is promoted first. The previous primary administrator then loses only the standard Company Administrator role and keeps normal company-user access. Other custom roles are preserved.</div>
+              <div className={styles.modalActions}>
+                <button className={`${styles.button} ${styles.buttonSecondary}`} onClick={() => setAdminTransferCompany(null)} type="button">Cancel</button>
+                <button className={styles.button} disabled={busy || !adminTransferMembershipId} onClick={() => void transferPrimaryAdmin()} type="button">{busy ? "Changing…" : "Change administrator"}</button>
+              </div>
+            </div>
+          )}
+        </section>
+      </div>
+    ) : null}
   </main>;
 }
